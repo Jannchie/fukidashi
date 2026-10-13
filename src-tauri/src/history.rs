@@ -3,6 +3,7 @@
 //! 存在应用数据目录的 history.db（SQLite）。行号直接当句子 id 用：跨会话唯一，
 //! 译文晚到时按 id 回填同一行，前端也拿它对上译文。
 
+use crate::games::key as game_key;
 use crate::model::Sentence;
 use rusqlite::{params, Connection};
 use std::path::Path;
@@ -23,11 +24,6 @@ pub struct Page {
     pub translations: Vec<(u64, String)>,
     /// 更早的还有没有
     pub more: bool,
-}
-
-/// 游戏的键：exe 路径，不分大小写、去掉 `\\?\`，和 games.json 的比较规则一致
-fn game_key(path: &str) -> String {
-    path.trim_start_matches(r"\\?\").to_lowercase()
 }
 
 impl History {
@@ -57,11 +53,9 @@ impl History {
     /// 记一句原文，返回它的 id；库不可用时返回 None
     pub fn add(&self, game: &str, key: &str, text: &str, at: u64) -> Option<u64> {
         let db = self.db.as_ref()?.lock().unwrap();
-        db.execute(
-            "INSERT INTO lines (game, source, text, at) VALUES (?1, ?2, ?3, ?4)",
-            params![game_key(game), key, text, at as i64],
-        )
-        .inspect_err(|e| println!("[rust] 写历史失败: {e}"))
+        db.prepare_cached("INSERT INTO lines (game, source, text, at) VALUES (?1, ?2, ?3, ?4)")
+            .and_then(|mut st| st.execute(params![game_key(game), key, text, at as i64]))
+            .inspect_err(|e| println!("[rust] 写历史失败: {e}"))
         .ok()?;
         Some(db.last_insert_rowid() as u64)
     }
@@ -69,13 +63,14 @@ impl History {
     /// 回填译文。不在库里的 id（演示模式）自然什么也不改
     pub fn set_translation(&self, id: u64, text: &str) {
         let Some(db) = &self.db else { return };
+        let db = db.lock().unwrap();
         let _ = db
-            .lock()
-            .unwrap()
-            .execute("UPDATE lines SET translation = ?1 WHERE id = ?2", params![text, id as i64]);
+            .prepare_cached("UPDATE lines SET translation = ?1 WHERE id = ?2")
+            .and_then(|mut st| st.execute(params![text, id as i64]));
     }
 
-    /// 取 `before` 之前（不含）最近的 `limit` 句；`before` 为 None 时取最新的
+    /// 取 `before` 之前（不含）最近的 `limit` 句；`before` 为 None 时取最新的。
+    /// 句子不带振假名，由调用方按需标注
     pub fn page(&self, game: &str, before: Option<u64>, limit: usize) -> Page {
         let empty = Page { sentences: vec![], translations: vec![], more: false };
         let Some(db) = &self.db else { return empty };
@@ -101,9 +96,7 @@ impl History {
             if let Some(tr) = tr {
                 page.translations.push((id, tr));
             }
-            // 振假名不入库：现算很快，词典更新后旧记录也能跟着变好
-            let ruby = crate::furigana::annotate(&text);
-            page.sentences.push(Sentence { id, key, text, ruby, at });
+            page.sentences.push(Sentence { id, key, text, ruby: None, at, translating: false });
         }
         page
     }
@@ -130,8 +123,10 @@ impl History {
 }
 
 fn init(c: &Connection) -> rusqlite::Result<()> {
-    // WAL：边写边读不互相阻塞，断电也不容易坏库
+    // WAL：边写边读不互相阻塞，断电也不容易坏库。
+    // WAL 下 NORMAL 只在检查点时落盘：断电最多丢最后几句，换来每句入库不用等一次 fsync
     c.pragma_update(None, "journal_mode", "WAL")?;
+    c.pragma_update(None, "synchronous", "NORMAL")?;
     c.execute_batch(
         "CREATE TABLE IF NOT EXISTS lines (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,

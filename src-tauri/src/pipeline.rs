@@ -1,8 +1,7 @@
 use crate::backlog::Backlog;
-use crate::model::{HookLine, ThreadStat};
-use crate::normalize::collapse_repeats;
-use crate::normalize::{has_japanese, kana_ratio};
-use std::collections::{HashMap, HashSet, VecDeque};
+use crate::model::{Event, HookLine, ThreadStat};
+use crate::normalize::{collapse_repeats, has_japanese, kana_ratio};
+use std::collections::{HashMap, HashSet};
 
 /// 单路来源的累积状态。
 struct ThreadState {
@@ -12,7 +11,6 @@ struct ThreadState {
     total_len: usize,
     kana_sum: f32,
     seen: HashSet<String>,
-    recent: VecDeque<String>,
     sample: String,
     /// 长度为 1 的行占比统计，用来识别逐字输出
     single_char: usize,
@@ -29,7 +27,6 @@ impl ThreadState {
             total_len: 0,
             kana_sum: 0.0,
             seen: HashSet::new(),
-            recent: VecDeque::with_capacity(16),
             sample: String::new(),
             single_char: 0,
             saw_japanese: false,
@@ -51,10 +48,6 @@ impl ThreadState {
         if self.seen.len() < 4096 {
             self.seen.insert(text.to_string());
         }
-        if self.recent.len() == 16 {
-            self.recent.pop_front();
-        }
-        self.recent.push_back(text.to_string());
         if !text.trim().is_empty() {
             self.sample = text.to_string();
         }
@@ -89,8 +82,6 @@ impl ThreadState {
     }
 
     fn stat(&self, key: &str) -> ThreadStat {
-        let avg_len = self.avg_len();
-        let kana = self.kana();
         ThreadStat {
             key: key.to_string(),
             name: self.name.clone(),
@@ -98,9 +89,9 @@ impl ThreadState {
             sample: self.sample.clone(),
             count: self.count,
             unique_count: self.seen.len(),
-            avg_len,
-            kana_ratio: kana,
-            score: 0.0,
+            avg_len: self.avg_len(),
+            kana_ratio: self.kana(),
+            score: score_from(self.score_input()),
             per_glyph: self.per_glyph(),
         }
     }
@@ -163,18 +154,6 @@ fn score_from(s: ScoreInput) -> f32 {
     v.clamp(0.0, 100.0)
 }
 
-/// 对外的打分入口，只在生成统计快照时调用（每 400ms 一次），可以承受扫描 sample。
-pub fn score(s: &ThreadStat) -> f32 {
-    score_from(ScoreInput {
-        count: s.count,
-        unique_count: s.unique_count,
-        avg_len: s.avg_len,
-        kana_ratio: s.kana_ratio,
-        per_glyph: s.per_glyph,
-        has_jp: s.kana_ratio > 0.0 || has_japanese(&s.sample),
-    })
-}
-
 /// 预热期：收到这么多行之前不做自动选择。
 ///
 /// 必要性来自一个不对称：逐字钩子每句话会产出几十行，整句来源只产出一行。
@@ -189,8 +168,6 @@ pub struct Pipeline {
     /// 已选中的来源。None 表示交给自动选择。
     pinned: Option<String>,
     auto: Option<String>,
-    /// 去重：正文钩子经常对同一句重复触发
-    last_emitted: Option<String>,
     /// 全部来源累计收到的行数，用于判断预热是否结束
     total_lines: usize,
     /// 上次为这个游戏手动锁定过的 H-code。key 里带着 pid，每次启动都不同，
@@ -212,7 +189,6 @@ impl Pipeline {
             threads: HashMap::new(),
             pinned: None,
             auto: None,
-            last_emitted: None,
             total_lines: 0,
             prefer: None,
             backlog: Backlog::default(),
@@ -230,7 +206,6 @@ impl Pipeline {
 
     pub fn pin(&mut self, key: Option<String>) {
         self.pinned = key;
-        self.last_emitted = None;
     }
 
     /// 当前锁定那一路的 H-code，用来记进游戏记录
@@ -249,7 +224,6 @@ impl Pipeline {
         self.pinned = None;
         self.prefer = None;
         self.auto = None;
-        self.last_emitted = None;
         self.total_lines = 0;
         self.backlog = Backlog::default();
     }
@@ -269,10 +243,14 @@ impl Pipeline {
         if self.pinned.is_none() && self.prefer.as_deref().is_some_and(|h| h == line.hcode) {
             self.pinned = Some(line.key.clone());
         }
-        self.threads
-            .entry(line.key.clone())
-            .or_insert_with(|| ThreadState::new(line.name.clone(), line.hcode.clone()))
-            .push(&line.text);
+        match self.threads.get_mut(&line.key) {
+            Some(t) => t.push(&line.text),
+            None => {
+                let mut t = ThreadState::new(line.name.clone(), line.hcode.clone());
+                t.push(&line.text);
+                self.threads.insert(line.key.clone(), t);
+            }
+        }
         self.total_lines += 1;
 
         self.recompute_auto();
@@ -282,18 +260,12 @@ impl Pipeline {
             return None;
         }
 
-        // CLI 不加载 GUI 那套 Remove Repeated * 插件，重复要自己收拾
         let text = collapse_repeats(line.text.trim());
         let text = text.trim();
-        if text.is_empty() {
+        if text.is_empty() || !self.backlog.accept(text, std::time::Instant::now()) {
             return None;
         }
-        // 同一句连续重复只推一次
-        if self.last_emitted.as_deref() == Some(text) {
-            return None;
-        }
-        self.last_emitted = Some(text.to_string());
-        self.backlog.filter(text, std::time::Instant::now())
+        Some(text.to_string())
     }
 
     /// 重新计算自动选择的来源。
@@ -330,28 +302,19 @@ impl Pipeline {
             return;
         }
 
-        let key = best_key.clone();
-        // 从一路换到另一路时，去重状态要清掉，否则新源的第一句可能被误判成重复
-        let had_previous = self.auto.is_some();
-        self.auto = Some(key);
-        if had_previous {
-            self.last_emitted = None;
-        }
+        self.auto = Some(best_key.clone());
     }
 
-    /// 当前所有来源的统计，按分数降序。
-    pub fn stats(&self) -> Vec<ThreadStat> {
-        let mut v: Vec<ThreadStat> = self
-            .threads
-            .iter()
-            .map(|(k, st)| {
-                let mut s = st.stat(k);
-                s.score = score(&s);
-                s
-            })
-            .collect();
-        v.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
-        v
+    /// 当前所有来源的统计（按分数降序）和选择状态，推给前端的快照
+    pub fn snapshot(&self) -> Event {
+        let mut threads: Vec<ThreadStat> = self.threads.iter().map(|(k, st)| st.stat(k)).collect();
+        threads.sort_by(|a, b| b.score.total_cmp(&a.score));
+        Event::Threads {
+            threads,
+            active: self.active().cloned(),
+            pinned: self.pinned.clone(),
+            warming_up: self.warming_up(),
+        }
     }
 }
 
@@ -423,25 +386,17 @@ mod tests {
         let mut p = Pipeline::new();
         p.pin(Some("a".into()));
         // 每字重复 5 遍，模拟描边绘制多遍触发的钩子输出
-        let raw: String = "きょうはいいてんきだ".chars().flat_map(|c| std::iter::repeat(c).take(5)).collect();
+        let raw: String = "きょうはいいてんきだ".chars().flat_map(|c| std::iter::repeat_n(c, 5)).collect();
         assert_eq!(p.feed(&line("a", &raw)).as_deref(), Some("きょうはいいてんきだ"));
     }
 
     #[test]
     fn ascii_only_source_scores_zero() {
-        let s = ThreadStat {
-            key: "x".into(),
-            name: "n".into(),
-            hcode: String::new(),
-            sample: "SetTextColor".into(),
-            count: 50,
-            unique_count: 50,
-            avg_len: 12.0,
-            kana_ratio: 0.0,
-            score: 0.0,
-            per_glyph: false,
-        };
-        assert_eq!(score(&s), 0.0);
+        let mut t = ThreadState::new("n".into(), String::new());
+        for _ in 0..50 {
+            t.push("SetTextColor");
+        }
+        assert_eq!(score_from(t.score_input()), 0.0);
     }
 
     #[test]

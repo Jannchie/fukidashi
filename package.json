@@ -16,7 +16,6 @@
     "@jannchie/icons": "0.10.0",
     "@jannchie/icons-vue": "0.10.0",
     "@tauri-apps/api": "^2.12.3",
-    "@tauri-apps/plugin-opener": "^2",
     "@tauri-apps/plugin-process": "^2.4.0",
     "@tauri-apps/plugin-updater": "^2.13.3",
     "vue": "^3.5.13"

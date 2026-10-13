@@ -1,6 +1,5 @@
 import { computed, ref, shallowRef } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
-import { useTranslator } from './useTranslator'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 
 export interface ThreadStat {
@@ -28,6 +27,8 @@ export interface Sentence {
   text: string
   ruby: RubySegment[] | null
   at: number
+  /** 已交给翻译，译文随后按 id 推送 */
+  translating: boolean
 }
 
 export interface ProcessInfo {
@@ -68,7 +69,7 @@ export interface HookStatus {
 
 type FukidashiEvent =
   | ({ kind: 'sentence' } & Sentence)
-  | { kind: 'threads'; threads: ThreadStat[]; active: string | null; warmingUp: boolean }
+  | { kind: 'threads'; threads: ThreadStat[]; active: string | null; pinned: string | null; warmingUp: boolean }
   | { kind: 'status'; connected: boolean; detail: string }
   | { kind: 'translation'; id: number; text: string | null; error: string | null; done: boolean }
   | { kind: 'backlog'; game: string; page: HistoryPage }
@@ -86,13 +87,15 @@ interface HistoryPage {
  */
 const MAX_VISIBLE = 1000
 const PAGE = 200
+/** 与 Rust 侧 lib.rs 的 EVENT 一致 */
+const EVENT = 'fukidashi://event'
 
 const sentences = shallowRef<Sentence[]>([])
 /** 句子 id → 译文。条目存在但为空对象表示正在翻译。 */
 const translations = shallowRef<Record<number, Translation>>({})
-const threads = ref<ThreadStat[]>([])
+const threads = shallowRef<ThreadStat[]>([])
 const activeKey = ref<string | null>(null)
-/** 用户手动锁定的来源。null 表示交给自动选择。 */
+/** 锁定的来源（手动锁定，或按上次的选择自动锁定）。null 表示交给自动选择。 */
 const pinnedKey = ref<string | null>(null)
 const connected = ref(false)
 const warmingUp = ref(false)
@@ -124,35 +127,28 @@ export function flog(level: string, msg: string) {
   invoke('log_front', { level, msg }).catch(() => {})
 }
 
-const translator = useTranslator()
-
 export function useFukidashi() {
-  const current = computed(() => sentences.value.at(-1) ?? null)
-  const history = computed(() => sentences.value.slice(0, -1))
   const activeThread = computed(
     () => threads.value.find((t) => t.key === activeKey.value) ?? null,
   )
 
   async function bind() {
     if (unlisten) return
-    unlisten = await listen<FukidashiEvent>('fukidashi://event', (e) => {
+    unlisten = await listen<FukidashiEvent>(EVENT, (e) => {
       const p = e.payload
       switch (p.kind) {
         case 'sentence': {
-          const next = sentences.value.concat({
-            id: p.id,
-            key: p.key,
-            text: p.text,
-            ruby: p.ruby,
-            at: p.at,
-          })
+          const { kind: _, ...sentence } = p
+          const next = sentences.value.concat(sentence)
           if (next.length > MAX_VISIBLE) {
-            sentences.value = next.slice(-MAX_VISIBLE)
+            const dropped = next.splice(0, next.length - MAX_VISIBLE)
+            const rest = { ...translations.value }
+            for (const s of dropped) delete rest[s.id]
+            translations.value = rest
             hasOlder.value = historyGame.value !== null
-          } else {
-            sentences.value = next
           }
-          if (translator.ready.value) translations.value = { ...translations.value, [p.id]: {} }
+          sentences.value = next
+          if (p.translating) translations.value = { ...translations.value, [p.id]: {} }
           break
         }
         case 'translation':
@@ -170,6 +166,7 @@ export function useFukidashi() {
         case 'threads':
           threads.value = p.threads
           activeKey.value = p.active
+          pinnedKey.value = p.pinned
           warmingUp.value = p.warmingUp
           break
         case 'status':
@@ -187,6 +184,7 @@ export function useFukidashi() {
     translations.value = {}
     threads.value = []
     activeKey.value = null
+    pinnedKey.value = null
     warmingUp.value = false
     lastError.value = ''
   }
@@ -249,16 +247,11 @@ export function useFukidashi() {
 
   const stop = () => guard(() => invoke('stop'))
 
-  const pin = (key: string | null) => {
-    pinnedKey.value = key
-    return guard(() => invoke('pin_thread', { key }))
-  }
+  const pin = (key: string | null) => guard(() => invoke('pin_thread', { key }))
 
   return {
     sentences,
     translations,
-    current,
-    history,
     threads,
     activeKey,
     activeThread,

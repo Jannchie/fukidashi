@@ -7,7 +7,7 @@ use crate::model::Event;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::collections::VecDeque;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
@@ -32,8 +32,15 @@ pub struct TranslatorConfig {
     pub context: usize,
 }
 
+impl TranslatorConfig {
+    /// 开着且选了模型
+    fn ready(&self) -> bool {
+        self.enabled && !self.model.is_empty()
+    }
+}
+
 pub struct Translator {
-    config: Mutex<Option<TranslatorConfig>>,
+    config: Arc<Mutex<Option<TranslatorConfig>>>,
     queue: UnboundedSender<Job>,
 }
 
@@ -44,34 +51,38 @@ enum Job {
 }
 
 impl Translator {
-    pub fn new(app: AppHandle) -> Self {
+    /// `on_done` 在每句译完时调用（id, 译文），用来落库
+    pub fn new(app: AppHandle, on_done: impl Fn(u64, &str) + Send + 'static) -> Self {
         let (tx, rx) = unbounded_channel();
-        tauri::async_runtime::spawn(worker(app, rx));
-        Self { config: Mutex::new(None), queue: tx }
+        let config = Arc::new(Mutex::new(None));
+        tauri::async_runtime::spawn(worker(app, config.clone(), rx, on_done));
+        Self { config, queue: tx }
     }
 
     pub fn configure(&self, cfg: TranslatorConfig) {
         *self.config.lock().unwrap() = Some(cfg);
     }
 
-    pub fn enabled(&self) -> bool {
-        self.config.lock().unwrap().as_ref().is_some_and(|c| c.enabled && !c.model.is_empty())
-    }
-
-    pub fn submit(&self, id: u64, text: String) {
-        let _ = self.queue.send(Job::Line { id, text });
+    /// 交给翻译；翻译没开时返回 false
+    pub fn submit(&self, id: u64, text: &str) -> bool {
+        let ready = self.config.lock().unwrap().as_ref().is_some_and(TranslatorConfig::ready);
+        if ready {
+            let _ = self.queue.send(Job::Line { id, text: text.to_string() });
+        }
+        ready
     }
 
     pub fn reset(&self) {
         let _ = self.queue.send(Job::Reset);
     }
-
-    fn snapshot(&self) -> Option<TranslatorConfig> {
-        self.config.lock().unwrap().clone().filter(|c| c.enabled && !c.model.is_empty())
-    }
 }
 
-async fn worker(app: AppHandle, mut rx: UnboundedReceiver<Job>) {
+async fn worker(
+    app: AppHandle,
+    config: Arc<Mutex<Option<TranslatorConfig>>>,
+    mut rx: UnboundedReceiver<Job>,
+    on_done: impl Fn(u64, &str),
+) {
     let client = reqwest::Client::builder().timeout(TIMEOUT).build().expect("HTTP 客户端");
     let mut history: VecDeque<(String, String)> = VecDeque::new();
     let mut pending: VecDeque<(u64, String)> = VecDeque::new();
@@ -89,34 +100,25 @@ async fn worker(app: AppHandle, mut rx: UnboundedReceiver<Job>) {
         }
         while pending.len() > MAX_PENDING {
             let (id, _) = pending.pop_front().unwrap();
-            emit(&app, id, None, Some("跳过：句子来得太快".into()));
+            emit(&app, id, None, Some("跳过：句子来得太快".into()), true);
         }
         let Some((id, text)) = pending.pop_front() else { continue };
 
-        let Some(cfg) = app_translator(&app).and_then(|t| t.snapshot()) else { continue };
+        let Some(cfg) = config.lock().unwrap().clone().filter(TranslatorConfig::ready) else { continue };
         let skip = history.len().saturating_sub(cfg.context);
         let ctx: Vec<_> = history.iter().skip(skip).cloned().collect();
 
-        let partial = |so_far: &str| {
-            let _ = app.emit(crate::EVENT, Event::Translation {
-                id,
-                text: Some(so_far.to_string()),
-                error: None,
-                done: false,
-            });
-        };
+        let partial = |so_far: &str| emit(&app, id, Some(so_far.to_string()), None, false);
         match translate(&client, &cfg, &ctx, &text, partial).await {
             Ok(out) => {
                 history.push_back((text, out.clone()));
                 while history.len() > 32 {
                     history.pop_front();
                 }
-                if let Some(h) = app.try_state::<crate::history::History>() {
-                    h.set_translation(id, &out);
-                }
-                emit(&app, id, Some(out), None);
+                on_done(id, &out);
+                emit(&app, id, Some(out), None, true);
             }
-            Err(e) => emit(&app, id, None, Some(e)),
+            Err(e) => emit(&app, id, None, Some(e), true),
         }
     }
 }
@@ -131,14 +133,8 @@ fn apply(job: Job, pending: &mut VecDeque<(u64, String)>, history: &mut VecDeque
     }
 }
 
-use tauri::Manager;
-
-fn app_translator(app: &AppHandle) -> Option<tauri::State<'_, Translator>> {
-    app.try_state::<Translator>()
-}
-
-fn emit(app: &AppHandle, id: u64, text: Option<String>, error: Option<String>) {
-    let _ = app.emit(crate::EVENT, Event::Translation { id, text, error, done: true });
+fn emit(app: &AppHandle, id: u64, text: Option<String>, error: Option<String>, done: bool) {
+    let _ = app.emit(crate::EVENT, Event::Translation { id, text, error, done });
 }
 
 /// 专门训练过的翻译模型各有固定的提示词格式，不按它来质量会明显下降。
@@ -167,6 +163,15 @@ impl Template {
         }
     }
 
+    /// Sakura / GalTransl 只训练过日译简中，提示词也写死了简体中文；
+    /// 目标语言是别的时候改用通用提示词，不然配置里的目标语言会被悄悄忽略
+    fn for_config(cfg: &TranslatorConfig) -> Self {
+        match Self::of(&cfg.model) {
+            Self::GalTransl { .. } | Self::Sakura if cfg.target != "简体中文" => Self::Generic,
+            t => t,
+        }
+    }
+
     /// (temperature, top_p)，取各模型作者的推荐值
     fn sampling(&self) -> (f32, f32) {
         match self {
@@ -181,7 +186,7 @@ fn messages(cfg: &TranslatorConfig, ctx: &[(String, String)], text: &str) -> Vec
     let system = |s: &str| json!({ "role": "system", "content": s });
     let user = |s: String| json!({ "role": "user", "content": s });
 
-    match Template::of(&cfg.model) {
+    match Template::for_config(cfg) {
         Template::GalTransl { v15 } => {
             // 与 LunaTranslator 一致：术语表为空时整段省略。按模型卡留一个空术语表段落，
             // 模型会把历史和指令当成原文一起复述出来。
@@ -245,7 +250,7 @@ async fn translate(
     text: &str,
     on_partial: impl Fn(&str),
 ) -> Result<String, String> {
-    let (temperature, top_p) = Template::of(&cfg.model).sampling();
+    let (temperature, top_p) = Template::for_config(cfg).sampling();
     let body = json!({
         "model": cfg.model,
         "messages": messages(cfg, ctx, text),
@@ -435,6 +440,14 @@ mod tests {
         let m = messages(&cfg("galtransl-v4-4b"), &[], "こんにちは");
         assert_eq!(m[1]["content"], "将下面的文本从日文翻译成简体中文：
 こんにちは");
+    }
+
+    #[test]
+    fn other_targets_fall_back_to_generic_prompt() {
+        let mut c = cfg("sakura-galtransl-14b-v3.8");
+        c.target = "English".into();
+        assert_eq!(Template::for_config(&c), Template::Generic);
+        assert!(messages(&c, &[], "こんにちは")[0]["content"].as_str().unwrap().contains("English"));
     }
 
     #[test]

@@ -1,12 +1,11 @@
-//! 原始钩子文本的重复折叠。
+//! 原始钩子文本的重复折叠，以及日文字符的分类。
 //!
-//! Textractor 的图形界面默认挂着 Remove Repeated Characters / Phrases 这几个
-//! 插件，而 CLI 不加载任何 xdll —— 我们拿到的是完全未过滤的原始输出，
+//! 钩子拿到的是引擎每一次绘制的原始输出：描边要画好几遍、同一句会分两次画，
 //! 重复得自己收拾。
 //!
-//! 这里所有规则都遵循同一条原则：**只在模式覆盖整个字符串时才动手**。
-//! 局部匹配一律不碰，否则会误伤正文里本来就有的叠字（「そそる」「まさか」
-//! 里的连续假名、拟声词、长音记号等等）。
+//! 所有规则都押在同一个不对称上：漏折只是多一份重复，误折是把原文改错。
+//! 所以只折结构上确定的重复（逐字 N 倍、整串重复、不短于 `MIN_UNIT` 的整段重复），
+//! 短的局部重复一律不碰，否则会误伤正文里本来就有的叠字（「そそる」「ドキドキ」等）。
 
 /// 折叠整串级别的重复。不匹配任何模式时原样返回。
 pub fn collapse_repeats(s: &str) -> String {
@@ -22,7 +21,43 @@ pub fn collapse_repeats(s: &str) -> String {
         }
         cur = next;
     }
-    cur.into_iter().collect()
+    repair_single_repeat(&cur).unwrap_or(cur).into_iter().collect()
+}
+
+/// 句中只有一处长重复时修掉它：`A。B。B。` → `A。B。`。
+///
+/// 成因是最后一句画了两遍。有两处以上的重复则不是单句的毛刺，而是回看时
+/// 整屏重绘拼成的一行，留给 backlog 整行丢弃。
+fn repair_single_repeat(c: &[char]) -> Option<Vec<char>> {
+    match repeats(c).as_slice() {
+        [(i, len)] if *len >= MIN_UNIT => Some(c[..i + len].iter().chain(&c[i + 2 * len..]).copied().collect()),
+        _ => None,
+    }
+}
+
+/// 找出所有「一段紧接着又出现一遍」的位置 (起点, 长度)，互不重叠。
+///
+/// 重复单元至少 4 个字、4 种不同的字：`はぁ……はぁ……`、`ドキドキ` 这种叠字
+/// 和语气是正文本来就有的，不算。
+pub fn repeats(c: &[char]) -> Vec<(usize, usize)> {
+    const MAX_UNIT: usize = 160;
+    let n = c.len();
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i + 8 <= n {
+        let hit = (4..=MAX_UNIT.min((n - i) / 2)).find(|&len| {
+            c[i..i + len] == c[i + len..i + 2 * len]
+                && c[i..i + len].iter().collect::<std::collections::HashSet<_>>().len() >= 4
+        });
+        match hit {
+            Some(len) => {
+                out.push((i, len));
+                i += 2 * len;
+            }
+            None => i += 1,
+        }
+    }
+    out
 }
 
 /// 逐字 N 倍重复：`あああああいいいいい…` → `あい…`。
@@ -80,7 +115,7 @@ fn collapse_runs(c: &[char]) -> Option<Vec<char>> {
     let mut out: Vec<char> = Vec::with_capacity(c.len() / n + runs.len());
     for &(ch, len) in &runs {
         let k = ((len + n / 2) / n).max(1);
-        out.extend(std::iter::repeat(ch).take(k));
+        out.extend(std::iter::repeat_n(ch, k));
     }
     if out.len() == c.len() {
         return None;
@@ -169,38 +204,44 @@ fn collapse_echo(c: &[char]) -> Option<Vec<char>> {
     (MIN_UNIT..=n / 2).find(|&k| c[k..].ends_with(&c[..k])).map(|k| c[k..].to_vec())
 }
 
+pub fn is_kanji(c: char) -> bool {
+    matches!(c, '\u{4E00}'..='\u{9FFF}' | '\u{3400}'..='\u{4DBF}' | '\u{F900}'..='\u{FAFF}' | '々' | '〆' | 'ヶ')
+}
+
+/// 平假名、片假名（含长音ー）、半角片假名
+pub fn is_kana(c: char) -> bool {
+    matches!(c, '\u{3041}'..='\u{309F}' | '\u{30A1}'..='\u{30FA}' | 'ー' | '\u{FF66}'..='\u{FF9D}')
+}
+
 /// 判断一段文本里假名的占比。正文几乎必然含大量平假名，
 /// 而菜单、文件名、变量名这些噪声来源通常是纯 ASCII 或纯汉字。
 pub fn kana_ratio(s: &str) -> f32 {
-    let mut kana = 0usize;
-    let mut total = 0usize;
-    for c in s.chars() {
-        if c.is_whitespace() {
-            continue;
-        }
-        total += 1;
-        let u = c as u32;
-        // 平假名 3040-309F，片假名 30A0-30FF，半角片假名 FF66-FF9D
-        if (0x3040..=0x309F).contains(&u) || (0x30A0..=0x30FF).contains(&u) || (0xFF66..=0xFF9D).contains(&u) {
-            kana += 1;
-        }
-    }
+    let (kana, total) = s
+        .chars()
+        .filter(|c| !c.is_whitespace())
+        .fold((0usize, 0usize), |(k, t), c| (k + is_kana(c) as usize, t + 1));
     if total == 0 { 0.0 } else { kana as f32 / total as f32 }
 }
 
 /// 是否含日文字符（假名或汉字）。用来把纯 ASCII 的噪声源直接判死。
 pub fn has_japanese(s: &str) -> bool {
-    s.chars().any(|c| {
-        let u = c as u32;
-        (0x3040..=0x30FF).contains(&u)      // 假名
-            || (0x4E00..=0x9FFF).contains(&u)   // CJK 统一汉字
-            || (0xFF66..=0xFF9D).contains(&u)   // 半角片假名
-    })
+    s.chars().any(|c| is_kana(c) || is_kanji(c))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn repairs_doubled_last_sentence() {
+        assert_eq!(
+            collapse_repeats("昨日値付けした本を、店の書棚へと並べていく。蓮さんのおかげで、古い絶版本が結構な数発掘された。蓮さんのおかげで、古い絶版本が結構な数発掘された。"),
+            "昨日値付けした本を、店の書棚へと並べていく。蓮さんのおかげで、古い絶版本が結構な数発掘された。"
+        );
+        // 两处以上的重复是回看重绘，不在这里修
+        let dump = "蓮「…………」蓮「…………」蓮さんが頬を差し出してくる。蓮さんが頬を差し出してくる。";
+        assert_eq!(collapse_repeats(dump), dump);
+    }
 
     #[test]
     fn drops_echo_before_full_line() {
@@ -218,7 +259,7 @@ mod tests {
 
     /// 模拟描边绘制：每个字符重复 n 遍。
     fn stroked(s: &str, n: usize) -> String {
-        s.chars().flat_map(|c| std::iter::repeat(c).take(n)).collect()
+        s.chars().flat_map(|c| std::iter::repeat_n(c, n)).collect()
     }
 
     #[test]
@@ -347,7 +388,7 @@ mod tests {
         // 原文「あいいうえ」，其中「いい」是原文自带的重复
         let raw: String = [('あ', 5), ('い', 10), ('う', 5), ('え', 5)]
             .iter()
-            .flat_map(|&(ch, n)| std::iter::repeat(ch).take(n))
+            .flat_map(|&(ch, n)| std::iter::repeat_n(ch, n))
             .collect();
         assert_eq!(collapse_repeats(&raw), "あいいうえ");
 

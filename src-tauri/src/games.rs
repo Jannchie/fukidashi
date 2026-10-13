@@ -32,10 +32,14 @@ pub struct Games {
     list: Mutex<Vec<Game>>,
 }
 
-/// 路径比较不分大小写、忽略 `\\?\` 前缀：同一个 exe 从不同 API 拿到的写法可能不同
+/// 游戏的键：exe 路径不分大小写、去掉 `\\?\` 前缀。同一个 exe 从不同 API 拿到的写法可能不同。
+/// 历史记录也按它分游戏存。
+pub fn key(path: &str) -> String {
+    path.trim_start_matches(r"\\?\").to_lowercase()
+}
+
 fn same(a: &str, b: &str) -> bool {
-    let norm = |s: &str| s.trim_start_matches(r"\\?\").to_lowercase();
-    norm(a) == norm(b)
+    key(a) == key(b)
 }
 
 impl Games {

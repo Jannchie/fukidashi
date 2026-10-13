@@ -42,7 +42,7 @@ let id = 1000
 const PAST = Array.from({ length: 450 }, (_, k) => {
   const [text, ruby, tr] = LINES[k % LINES.length]
   const at = Date.now() - (k < 225 ? 2 : 1) * 86400000 + k * 8000
-  return { id: k + 1, key: 'k1', text: `${text}（${k + 1}）`, ruby: [...ruby, r(`（${k + 1}）`)], at, tr }
+  return { id: k + 1, key: 'k1', text: `${text}（${k + 1}）`, ruby: [...ruby, r(`（${k + 1}）`)], at, translating: false, tr }
 })
 
 function page(before: number | null, limit: number) {
@@ -62,6 +62,7 @@ function play(detail: string, game: string | null) {
   emit('fukidashi://event', {
     kind: 'threads',
     active: 'k1',
+    pinned: null,
     warmingUp: false,
     threads: [
       { key: 'k1', name: 'krkrz2', hcode: 'HQX-C@20DA90', sample: LINES[0][0], count: 42, uniqueCount: 40, avgLen: 18, kanaRatio: 0.62, score: 84, perGlyph: false },
@@ -72,7 +73,7 @@ function play(detail: string, game: string | null) {
   const next = () => {
     const [text, ruby, tr] = LINES[i++ % LINES.length]
     const sid = id++
-    emit('fukidashi://event', { kind: 'sentence', id: sid, key: 'k1', text, ruby, at: Date.now() })
+    emit('fukidashi://event', { kind: 'sentence', id: sid, key: 'k1', text, ruby, at: Date.now(), translating: true })
     // 模拟流式输出：逐字吐出
     const chars = [...tr]
     chars.forEach((_, k) => setTimeout(() => emit('fukidashi://event', {
@@ -100,7 +101,6 @@ mockIPC(
         clearInterval(timer)
         emit('fukidashi://event', { kind: 'status', connected: false, detail: '已停止' })
         return
-      case 'get_threads': return [[], null]
       default: return null
     }
   },

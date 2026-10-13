@@ -10,6 +10,7 @@ use lindera::segmenter::Segmenter;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::sync::OnceLock;
+use crate::normalize::{is_kana, is_kanji};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RubySegment {
@@ -60,14 +61,6 @@ pub fn warm_up() {
     std::thread::spawn(|| {
         segmenter();
     });
-}
-
-fn is_kanji(c: char) -> bool {
-    matches!(c, '\u{4E00}'..='\u{9FFF}' | '\u{3400}'..='\u{4DBF}' | '\u{F900}'..='\u{FAFF}' | '々' | '〆' | 'ヶ')
-}
-
-fn is_kana(c: char) -> bool {
-    matches!(c, '\u{3041}'..='\u{309F}' | '\u{30A1}'..='\u{30FA}')
 }
 
 /// 片假名 ァ(U+30A1)..ヶ(U+30F6) 恰好比对应的平假名大 0x60

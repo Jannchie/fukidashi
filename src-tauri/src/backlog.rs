@@ -9,21 +9,25 @@
 //! 这些都不该当成新台词显示、翻译、入库。但故事里本来就会重复台词
 //! （同一句「旦那様」、回忆里重放的原话），所以不能见到读过的就扔，
 //! 要看上下文：先认出一次明确的「批量重绘」，进入回看状态，状态里的重复才扔。
+//! 唯一无条件扔掉的是和上一句完全相同的：那是钩子对同一句的重复触发。
+//!
+//! 单句里画了两遍的毛刺由 normalize 在这之前修好，这里只判断整行的去留。
 //!
 //! 规则全部从真机记录里归纳，见 tests 里的样本。
 
+use crate::normalize::repeats;
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
 /// 最近一次认出回看后，这么久之内都按回看处理
 const BACKLOG_WINDOW: Duration = Duration::from_secs(15);
-/// 记住这么多句读过的，用来认出旧句子
-const MEMORY: usize = 3000;
+/// 记住这么多句读过的，用来认出旧句子；连上游戏时也按这个数从历史里取
+pub const MEMORY: usize = 3000;
 
 #[derive(Default)]
 pub struct Backlog {
-    /// 读过的句子，按时间顺序
-    seen: Vec<String>,
+    /// 读过的句子及其字数，按时间顺序
+    seen: Vec<(String, usize)>,
     /// 句子 → 在 seen 里最后一次出现的位置
     index: HashMap<String, usize>,
     /// 上一句是重复句时，它重复的是第几句；连续倒着重复就是在往上翻 backlog
@@ -44,53 +48,49 @@ impl Backlog {
         if self.seen.len() >= MEMORY * 2 {
             // 偶尔整体截一半，比每句都挪动便宜
             self.seen.drain(..MEMORY);
-            self.index = self.seen.iter().enumerate().map(|(i, s)| (s.clone(), i)).collect();
+            self.index = self.seen.iter().enumerate().map(|(i, (s, _))| (s.clone(), i)).collect();
         }
         self.index.insert(text.clone(), self.seen.len());
-        self.seen.push(text);
+        let len = text.chars().count();
+        self.seen.push((text, len));
     }
 
-    /// 返回应当显示的文本（可能修掉了一段重复），None 表示这是回看重绘，丢掉
-    pub fn filter(&mut self, text: &str, now: Instant) -> Option<String> {
+    /// 这一行是否应当显示；false 表示是重复触发或回看重绘，丢掉
+    pub fn accept(&mut self, text: &str, now: Instant) -> bool {
         let in_backlog = self.last_drop.is_some_and(|t| now - t < BACKLOG_WINDOW);
         let chars: Vec<char> = text.chars().collect();
         let reps = repeats(&chars);
 
-        // 只有一处长重复：是单句的重绘毛刺（最后一句话画了两遍），修掉而不是扔掉
-        let text: String = match reps.as_slice() {
-            [(i, len)] if *len >= 8 => chars[..i + len].iter().chain(&chars[i + 2 * len..]).collect(),
-            _ => text.to_string(),
-        };
-        let single_fixed = matches!(reps.as_slice(), [(_, len)] if *len >= 8);
-
         // 一行里拼了好几句：多处重复、三段以上的台词、或者含两句以上读过的长句
-        let dump = (!single_fixed && reps.len() >= 2)
-            || text.matches('「').count() >= 3
-            || self.contains_seen(&text, 10, 2);
+        let dump = reps.len() >= 2 || text.matches('「').count() >= 3 || self.contains_seen(text, 10, 2);
         if dump {
             return self.reject(now);
         }
 
-        if let Some(&j) = self.index.get(&text) {
+        if let Some(&j) = self.index.get(text) {
             let reversed = self.last_dup.is_some_and(|(i, t)| i > j && now - t < BACKLOG_WINDOW);
             self.last_dup = Some((j, now));
+            // 和上一句完全相同：钩子对同一句的重复触发，丢掉但不算回看
+            if j + 1 == self.seen.len() {
+                return false;
+            }
             if in_backlog || reversed {
                 return self.reject(now);
             }
         } else {
             // 回看状态里，带着重复或夹着读过句子的残片也是重绘出来的
-            if in_backlog && (!reps.is_empty() && !single_fixed || self.contains_seen(&text, 6, 1)) {
+            if in_backlog && (!reps.is_empty() || self.contains_seen(text, 6, 1)) {
                 return self.reject(now);
             }
             self.last_dup = None;
         }
-        self.remember(text.clone());
-        Some(text)
+        self.remember(text.to_string());
+        true
     }
 
-    fn reject(&mut self, now: Instant) -> Option<String> {
+    fn reject(&mut self, now: Instant) -> bool {
         self.last_drop = Some(now);
-        None
+        false
     }
 
     /// 文本里是否含有至少 `n` 句不同的、不短于 `min` 字的读过的句子（且不是整句相同）
@@ -100,8 +100,8 @@ impl Backlog {
             return false;
         }
         let mut hits = HashSet::new();
-        for s in self.seen.iter().rev().take(MEMORY) {
-            if s != text && s.chars().count() >= min && text.contains(s.as_str()) {
+        for (s, chars) in self.seen.iter().rev().take(MEMORY) {
+            if *chars >= min && *chars < len && text.contains(s.as_str()) {
                 hits.insert(s.as_str());
                 if hits.len() >= n {
                     return true;
@@ -112,51 +112,27 @@ impl Backlog {
     }
 }
 
-/// 找出所有「一段紧接着又出现一遍」的位置 (起点, 长度)，互不重叠。
-///
-/// 重复单元至少 4 个字、4 种不同的字：`はぁ……はぁ……`、`ドキドキ` 这种叠字
-/// 和语气是正文本来就有的，不算。
-fn repeats(c: &[char]) -> Vec<(usize, usize)> {
-    const MAX_UNIT: usize = 160;
-    let n = c.len();
-    let mut out = Vec::new();
-    let mut i = 0;
-    while i + 8 <= n {
-        let hit = (4..=MAX_UNIT.min((n - i) / 2)).find(|&len| {
-            c[i..i + len] == c[i + len..i + 2 * len] && c[i..i + len].iter().collect::<HashSet<_>>().len() >= 4
-        });
-        match hit {
-            Some(len) => {
-                out.push((i, len));
-                i += 2 * len;
-            }
-            None => i += 1,
-        }
-    }
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn feed(b: &mut Backlog, lines: &[&str]) -> Vec<Option<String>> {
+    fn feed(b: &mut Backlog, lines: &[&str]) -> Vec<bool> {
         let t0 = Instant::now();
-        lines.iter().enumerate().map(|(k, l)| b.filter(l, t0 + Duration::from_millis(1500 * k as u64))).collect()
+        lines.iter().enumerate().map(|(k, l)| b.accept(l, t0 + Duration::from_millis(1500 * k as u64))).collect()
     }
 
     #[test]
     fn story_repeats_pass() {
         let mut b = Backlog::default();
         let out = feed(&mut b, &["蓮「旦那様」", "千明「おかえり、蓮さん」", "蓮「旦那様」", "蓮「はぁ……はぁ……んっ……はぁ…………はぁ……」"]);
-        assert!(out.iter().all(Option::is_some), "{out:?}");
+        assert!(out.iter().all(|&x| x), "{out:?}");
     }
 
     #[test]
-    fn doubled_last_sentence_is_repaired() {
+    fn same_as_previous_is_dropped() {
         let mut b = Backlog::default();
-        let out = feed(&mut b, &["昨日値付けした本を、店の書棚へと並べていく。蓮さんのおかげで、古い絶版本が結構な数発掘された。蓮さんのおかげで、古い絶版本が結構な数発掘された。"]);
-        assert_eq!(out[0].as_deref(), Some("昨日値付けした本を、店の書棚へと並べていく。蓮さんのおかげで、古い絶版本が結構な数発掘された。"));
+        b.seed(["一。あいうえお"].map(String::from));
+        assert_eq!(feed(&mut b, &["一。あいうえお", "二。かきくけこ", "二。かきくけこ", "三。さしすせそ"]), [false, true, false, true]);
     }
 
     #[test]
@@ -171,18 +147,16 @@ mod tests {
             "忍「ふむ。理解が早くてよろしい」",
             "忍「いいかい、世の中には謎がたくさんあるんだ」",
         ]);
-        assert!(out.iter().all(Option::is_none), "{out:?}");
+        assert!(out.iter().all(|&x| !x), "{out:?}");
     }
 
     #[test]
     fn scrolling_back_line_by_line_is_dropped() {
         let mut b = Backlog::default();
         b.seed(["一。あいうえお", "二。かきくけこ", "三。さしすせそ", "四。たちつてと"].map(String::from));
-        // 倒着来的读过的句子：第一句无从判断，第二句起认出来
         let out = feed(&mut b, &["四。たちつてと", "三。さしすせそ", "二。かきくけこ", "五。なにぬねの"]);
-        assert_eq!(out[1], None);
-        assert_eq!(out[2], None);
-        assert_eq!(out[3].as_deref(), Some("五。なにぬねの"), "回看结束后的新句照常显示");
+        // 第一句和读过的最后一句相同，按重复触发丢掉；之后倒着来的认出是回看
+        assert_eq!(out, [false, false, false, true], "回看结束后的新句照常显示");
     }
 
     #[test]
@@ -191,6 +165,6 @@ mod tests {
         b.seed(["一。あいうえお", "二。かきくけこ", "三。さしすせそ"].map(String::from));
         // 读档后顺着重读：读过的，但顺序是正的
         let out = feed(&mut b, &["一。あいうえお", "二。かきくけこ", "三。さしすせそ"]);
-        assert!(out.iter().all(Option::is_some), "{out:?}");
+        assert!(out.iter().all(|&x| x), "{out:?}");
     }
 }

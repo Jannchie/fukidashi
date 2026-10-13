@@ -1,5 +1,6 @@
-import { computed, ref, watch } from 'vue'
+import { computed, watch } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
+import { persisted } from './persisted'
 
 export interface TranslatorConfig {
   enabled: boolean
@@ -22,39 +23,22 @@ export const PRESETS = [
 
 export const TARGETS = ['简体中文', '繁體中文', 'English'] as const
 
-const KEY = 'fukidashi.translator'
-/** 改名前的键，第一次启动时读过来 */
-const OLD_KEY = 'yomu.translator'
-
-const DEFAULTS: TranslatorConfig = {
+const config = persisted<TranslatorConfig>('fukidashi.translator', 'yomu.translator', {
   enabled: false,
   baseUrl: PRESETS[0].url,
   model: '',
   apiKey: '',
   target: TARGETS[0],
   context: 3,
-}
-
-function load(): TranslatorConfig {
-  try {
-    return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(KEY) ?? localStorage.getItem(OLD_KEY) ?? '{}') }
-  } catch {
-    return { ...DEFAULTS }
-  }
-}
-
-const config = ref<TranslatorConfig>(load())
+})
 
 /** 开着且选了模型才算可用 */
 const ready = computed(() => config.value.enabled && !!config.value.model)
 
-// 任何改动都立刻生效：存本地，同步给 Rust。启动时也会推一次。
+// 任何改动都立刻同步给 Rust，启动时也推一次
 watch(
   config,
   (c) => {
-    try {
-      localStorage.setItem(KEY, JSON.stringify(c))
-    } catch {}
     invoke('set_translator', { config: c }).catch(() => {})
   },
   { deep: true, immediate: true },

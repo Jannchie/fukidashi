@@ -1,7 +1,7 @@
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 /// 钩子送来的一句文本。
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HookLine {
     /// 唯一标识一路文本来源：pid:addr:ctx:ctx2。同一个 hook 函数被不同代码路径调用时
@@ -15,7 +15,7 @@ pub struct HookLine {
 }
 
 /// 一路文本源的运行时统计，打分用。
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ThreadStat {
     pub key: String,
@@ -38,7 +38,7 @@ pub struct ThreadStat {
 }
 
 /// 推给前端的一句话。
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Sentence {
     pub id: u64,
@@ -48,6 +48,8 @@ pub struct Sentence {
     pub ruby: Option<Vec<crate::furigana::RubySegment>>,
     /// 毫秒时间戳
     pub at: u64,
+    /// 已交给翻译，译文随后按 id 推送
+    pub translating: bool,
 }
 
 /// 前端订阅的事件负载。
@@ -57,7 +59,7 @@ pub enum Event {
     /// 新的一句正文（只有被选中的那一路才会产生）
     Sentence(Sentence),
     /// 线程统计刷新
-    Threads { threads: Vec<ThreadStat>, active: Option<String>, warming_up: bool },
+    Threads { threads: Vec<ThreadStat>, active: Option<String>, pinned: Option<String>, warming_up: bool },
     /// 连接状态变化
     Status { connected: bool, detail: String },
     /// 某一句的译文（或失败原因），按 id 对上 Sentence。
@@ -67,7 +69,7 @@ pub enum Event {
     Backlog { game: String, page: crate::history::Page },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProcessInfo {
     pub pid: u32,

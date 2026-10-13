@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import type { Sentence, Translation } from '../composables/useFukidashi'
 import type { ReaderPrefs } from '../composables/useReader'
 import { JIcon } from '@jannchie/icons-vue'
 import { IconArrowDownToLine } from '@jannchie/icons'
+import SentenceEntry from './SentenceEntry.vue'
 
 const props = defineProps<{
   sentences: Sentence[]
@@ -54,12 +55,12 @@ async function older() {
 /** 两句隔了这么久就算另一次游玩，中间插一条时间 */
 const SESSION_GAP = 30 * 60 * 1000
 const fmt = new Intl.DateTimeFormat('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-function divider(i: number): string | null {
-  const s = props.sentences[i]
-  const prev = props.sentences[i - 1]
-  if (prev && s.at - prev.at < SESSION_GAP) return null
-  return fmt.format(s.at)
-}
+const dividers = computed(() =>
+  props.sentences.map((s, i) => {
+    const prev = props.sentences[i - 1]
+    return prev && s.at - prev.at < SESSION_GAP ? null : fmt.format(s.at)
+  }),
+)
 
 function toBottom() {
   const el = scroller.value
@@ -146,23 +147,9 @@ function jumpToLatest() {
       <div ref="content">
         <p v-if="hasOlder" class="older">往上翻加载更早的记录…</p>
         <template v-for="(s, i) in sentences" :key="s.id">
-          <p v-if="divider(i)" class="when"><span>{{ divider(i) }}</span></p>
-          <div class="entry" :class="{ latest: i === sentences.length - 1 }">
-            <p class="line">
-              <template v-if="prefs.ruby && s.ruby">
-                <template v-for="(seg, j) in s.ruby" :key="j">
-                  <ruby v-if="seg.ruby">{{ seg.text }}<rt>{{ seg.ruby }}</rt></ruby>
-                  <template v-else>{{ seg.text }}</template>
-                </template>
-              </template>
-              <template v-else>{{ s.text }}</template>
-            </p>
-            <template v-if="prefs.translation && translations[s.id]">
-              <p v-if="translations[s.id].text" class="tr" :class="{ streaming: translations[s.id].streaming }">{{ translations[s.id].text }}</p>
-              <p v-else-if="translations[s.id].error" class="tr failed">{{ translations[s.id].error }}</p>
-              <p v-else class="tr waiting">翻译中…</p>
-            </template>
-          </div>
+          <p v-if="dividers[i]" class="when"><span>{{ dividers[i] }}</span></p>
+          <SentenceEntry :s="s" :tr="translations[s.id]" :latest="i === sentences.length - 1"
+                         :ruby="prefs.ruby" :show-tr="prefs.translation" />
         </template>
       </div>
 
@@ -203,72 +190,6 @@ function jumpToLatest() {
   /* 正文可以选中复制 —— 查词、贴给别人问都需要 */
   user-select: text;
   cursor: text;
-}
-
-/* 字号全部从 --fs（最新一句的字号）按比例推出来，调一个值整体缩放 */
-.entry {
-  margin: 0 0 calc(var(--fs) * 0.8);
-}
-
-.line {
-  margin: 0;
-  font-family: var(--f-jp);
-  font-size: calc(var(--fs) * 0.78);
-  /* 留出振假名的位置，免得上下行挤在一起 */
-  line-height: 2.05;
-  color: var(--ink-soft);
-  transition: color var(--t);
-  /* 日文没有词间空格，靠这个避免标点落在行首 */
-  line-break: strict;
-  overflow-wrap: anywhere;
-}
-
-/* 振假名：小、弱、不参与选中复制（复制出来的应是原文） */
-rt {
-  font-size: 0.5em;
-  color: var(--muted);
-  letter-spacing: 0;
-  user-select: none;
-}
-
-/* 最新一句是主角：更大、最高对比度 */
-.latest .line {
-  font-size: var(--fs);
-  line-height: 1.95;
-  color: var(--ink);
-  letter-spacing: 0.01em;
-}
-.latest rt {
-  color: var(--ink-soft);
-}
-
-/* 译文跟在原文下面，始终比原文弱一级：读的是日文，译文只是兜底 */
-.tr {
-  margin: 2px 0 0;
-  font-size: calc(var(--fs) * 0.62);
-  line-height: 1.75;
-  color: var(--muted);
-}
-.latest .tr {
-  font-size: calc(var(--fs) * 0.72);
-  color: var(--ink-soft);
-}
-/* 流式输出时末尾一个闪烁的光标，表示还没说完 */
-.tr.streaming::after {
-  content: '▍';
-  margin-left: 1px;
-  color: var(--accent);
-  animation: blink 1s steps(2, start) infinite;
-}
-@keyframes blink {
-  to { visibility: hidden; }
-}
-.tr.waiting {
-  opacity: 0.6;
-}
-.tr.failed {
-  font-size: 12px;
-  color: var(--accent);
 }
 
 /* 每次游玩开头的时间：细线中间一个小标签，不抢正文 */
