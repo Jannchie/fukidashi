@@ -49,6 +49,6 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: Fukidashi ${{ github.ref_name }}
-          releaseBody: 下载 `Fukidashi_*_x64-setup.exe` 安装。已安装的版本会在启动时提示更新。
+          releaseBody: 下载并运行 `Fukidashi_*_x64-setup.exe`。已安装旧版本的用户会在应用内收到更新提示。
           releaseDraft: false
           prerelease: false
