@@ -9,7 +9,6 @@ const THRESHOLD = 4
 const INTERACTIVE = 'button, a, input, select, textarea, label, [role], [tabindex], [data-no-drag]'
 
 export function useDragRegion() {
-  const win = getCurrentWindow()
   let start: { x: number, y: number } | null = null
 
   const draggable = (e: MouseEvent) => !(e.target as Element).closest(INTERACTIVE)
@@ -26,7 +25,7 @@ export function useDragRegion() {
     }
     if (Math.hypot(e.screenX - start.x, e.screenY - start.y) < THRESHOLD) return
     start = null
-    win.startDragging()
+    getCurrentWindow().startDragging()
   }
 
   function onPointerup() {
@@ -34,7 +33,7 @@ export function useDragRegion() {
   }
 
   function onDblclick(e: MouseEvent) {
-    if (e.button === 0 && draggable(e)) win.toggleMaximize()
+    if (e.button === 0 && draggable(e)) getCurrentWindow().toggleMaximize()
   }
 
   // 拦住拖出文本选区和光标变成 I 形

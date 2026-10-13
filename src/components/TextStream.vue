@@ -64,34 +64,79 @@ function divider(i: number): string | null {
 function toBottom() {
   const el = scroller.value
   if (!el) return
+  stopFollow()
   el.scrollTop = el.scrollHeight
   lastTop = el.scrollTop
 }
 
-// 新句子、晚到的译文、调字号、窗口变窄换行……一切让内容变高的情况都在这里统一贴底，
+// 内容变高时平滑地滚到底：每帧朝当前的底部逼近一段（指数缓动）。
+// 目标每帧重新取，流式译文边长边追也不会顿挫；用户一往上翻，onScroll 取消贴底，这里随即停下。
+const EASE_MS = 90
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
+let frame = 0
+let guard = 0
+function stopFollow() {
+  cancelAnimationFrame(frame)
+  clearTimeout(guard)
+  frame = 0
+}
+function follow() {
+  const el = scroller.value
+  if (!el || frame) return
+  const gap = el.scrollHeight - el.clientHeight - el.scrollTop
+  // 一次进来一大屏（连上游戏时载入的记录）没必要演一遍，直接到底
+  if (reduceMotion.matches || gap > el.clientHeight * 2) return toBottom()
+  if (gap <= 0) return
+  let pos = el.scrollTop
+  let prev = performance.now()
+  const step = (now: number) => {
+    frame = 0
+    if (!stickToBottom.value) return stopFollow()
+    const target = el.scrollHeight - el.clientHeight
+    const left = target - pos
+    if (left <= 0.5) return toBottom()
+    pos += left * (1 - Math.exp(-(now - prev) / EASE_MS))
+    prev = now
+    el.scrollTop = pos
+    lastTop = el.scrollTop
+    frame = requestAnimationFrame(step)
+  }
+  frame = requestAnimationFrame(step)
+  // 窗口被遮住时 WebView 不跑动画帧，过一会儿还没到底就直接跳过去
+  guard = window.setTimeout(() => {
+    if (frame && stickToBottom.value) toBottom()
+  }, 1000)
+}
+
+// 新句子、晚到的译文、调字号……内容变高时平滑贴底；滚动区本身尺寸变了（拖窗口）直接贴底。
 // ResizeObserver 在布局后、绘制前回调，不会先闪一帧再跳
 let ro: ResizeObserver | undefined
 onMounted(() => {
-  ro = new ResizeObserver(() => {
-    if (stickToBottom.value) toBottom()
+  ro = new ResizeObserver((entries) => {
+    if (!stickToBottom.value) return
+    if (entries.some(e => e.target === scroller.value)) toBottom()
+    else follow()
   })
   if (scroller.value) ro.observe(scroller.value)
   if (content.value) ro.observe(content.value)
 })
-onUnmounted(() => ro?.disconnect())
+onUnmounted(() => {
+  ro?.disconnect()
+  stopFollow()
+})
 
 // 窗口被完全遮住时 WebView 会暂停渲染，ResizeObserver 不回调；按数据变化再贴一次底兜住
 watch(
   () => [props.sentences.length, props.translations],
   () => {
-    if (stickToBottom.value) toBottom()
+    if (stickToBottom.value) follow()
   },
   { flush: 'post' },
 )
 
 function jumpToLatest() {
   stickToBottom.value = true
-  toBottom()
+  follow()
 }
 </script>
 

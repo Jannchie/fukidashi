@@ -3,7 +3,7 @@
  * 只在 DEV 且不在 Tauri 窗口里时由 main.ts 动态加载，不会进生产包。
  * 台词、振假名、译文都取自真实运行时的输出。
  */
-import { mockIPC } from '@tauri-apps/api/mocks'
+import { mockIPC, mockWindows } from '@tauri-apps/api/mocks'
 import { emit } from '@tauri-apps/api/event'
 import type { Game, ProcessInfo, RubySegment } from '../composables/useFukidashi'
 
@@ -106,5 +106,8 @@ mockIPC(
   },
   { shouldMockEvents: true },
 )
+
+// 窗口按钮和标题栏拖动要用到当前窗口的信息
+mockWindows('main')
 
 console.info('[fukidashi] 浏览器模式：后端已模拟')

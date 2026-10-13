@@ -105,6 +105,7 @@ onMounted(refresh)
     <p class="hint">
       模型由 Ollama / LM Studio / llama.cpp 等服务运行，Fukidashi 只负责发请求。
       日译中推荐 Sakura-GalTransl（专为 galgame 训练），Sakura / GalTransl 系列会按模型名自动套用各自的提示词格式。
+      上下文句数指每次翻译附带的前文译文句数，用于保持人名与称呼一致；译文中混入前文内容时，可调小或设为 0。
     </p>
   </Modal>
 </template>
