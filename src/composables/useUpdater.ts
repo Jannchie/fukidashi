@@ -1,10 +1,14 @@
-import { ref } from 'vue'
+import { ref, shallowRef } from 'vue'
 import { check, type Update } from '@tauri-apps/plugin-updater'
 import { relaunch } from '@tauri-apps/plugin-process'
 import { flog } from './useFukidashi'
 
-/** 有新版本时才有值 */
-const available = ref<Update | null>(null)
+/**
+ * 有新版本时才有值。必须用 shallowRef：Update 用私有字段记着资源句柄，
+ * 被 ref 包成响应式代理后调用它的方法会报
+ * 「Cannot read private member from an object whose class did not declare it」
+ */
+const available = shallowRef<Update | null>(null)
 /** 最近一次检查的结果；idle 表示还没查过 */
 const status = ref<'idle' | 'checking' | 'latest' | 'available' | 'failed'>('idle')
 /** 下载进度 0–1；null 表示没在下载 */
