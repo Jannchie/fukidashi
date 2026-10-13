@@ -294,6 +294,8 @@ onMounted(async () => {
 
 .field.grow {
   flex: 1;
+  /* 最多收缩到列表的最小高度，再矮就整个弹窗滚动 */
+  min-height: auto;
 }
 
 .list {

@@ -73,6 +73,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
   /* 用视口单位而非 100%，高度不依赖父容器解析，杜绝上面那类循环依赖 */
   max-height: min(600px, calc(100vh - 48px));
   min-height: 0;
+  overflow-y: auto;
   padding: 18px 20px 16px;
   background: var(--surface);
   border: 1px solid var(--line);
@@ -104,6 +105,14 @@ footer {
 
 <!-- 弹窗里的表单控件：所有弹窗共用，限定在 .modal 之内 -->
 <style>
+/* 窗口矮时整个弹窗滚动，而不是把各段压扁叠在一起；只有标了 grow 的段（如进程列表）可以收缩 */
+.modal > * {
+  flex-shrink: 0;
+}
+.modal > .grow {
+  flex-shrink: 1;
+}
+
 .modal .field {
   display: flex;
   flex-direction: column;
