@@ -44,7 +44,7 @@
   --f-ui: "HarmonyOS Sans SC", "HarmonyOS Sans", -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display",
     "Segoe UI", "PingFang SC", "Microsoft YaHei UI", system-ui, sans-serif;
   /* 日文原文优先用日文字形完整的字体，避免中日汉字字形混排。鸿蒙字体只有简体中文字形，不用在这里 */
-  --f-jp: "Yu Gothic UI", "Yu Gothic", "Hiragino Kaku Gothic ProN", "Noto Sans JP",
+  --f-jp: "Noto Sans JP", "Yu Gothic UI", "Yu Gothic", "Hiragino Kaku Gothic ProN",
     "Meiryo", "Microsoft YaHei UI", sans-serif;
   --f-mono: "Berkeley Mono", "Cascadia Mono", Consolas, "Microsoft YaHei UI", ui-monospace, monospace;
 

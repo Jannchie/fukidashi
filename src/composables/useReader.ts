@@ -2,7 +2,7 @@ import { persisted } from './persisted'
 
 /** 阅读偏好：按人记住 */
 export interface ReaderPrefs {
-  /** 最新一句的字号（px），其余层级按比例缩放 */
+  /** 字号基准（px），原文、译文、振假名按比例缩放 */
   fontSize: number
   ruby: boolean
   /** 有译文时是否显示 */

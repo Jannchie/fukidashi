@@ -31,7 +31,8 @@ defineProps<{
 </template>
 
 <style scoped>
-/* 字号全部从 --fs（最新一句的字号）按比例推出来，调一个值整体缩放 */
+/* 字号全部从 --fs 按比例推出来，调一个值整体缩放。
+   所有句子同一字号：新句到来时上一句不缩小，列表只做平移，滚动才顺 */
 .entry {
   margin: 0 0 calc(var(--fs) * 0.8);
 }
@@ -39,7 +40,7 @@ defineProps<{
 .line {
   margin: 0;
   font-family: var(--f-jp);
-  font-size: calc(var(--fs) * 0.78);
+  font-size: calc(var(--fs) * 0.82);
   /* 留出振假名的位置，免得上下行挤在一起 */
   line-height: 2.05;
   color: var(--ink-soft);
@@ -57,12 +58,9 @@ rt {
   user-select: none;
 }
 
-/* 最新一句是主角：更大、最高对比度 */
+/* 最新一句只靠颜色突出，不改字号 */
 .latest .line {
-  font-size: var(--fs);
-  line-height: 1.95;
   color: var(--ink);
-  letter-spacing: 0.01em;
 }
 .latest rt {
   color: var(--ink-soft);
@@ -71,12 +69,12 @@ rt {
 /* 译文跟在原文下面，始终比原文弱一级：读的是日文，译文只是兜底 */
 .tr {
   margin: 2px 0 0;
-  font-size: calc(var(--fs) * 0.62);
+  font-size: calc(var(--fs) * 0.66);
   line-height: 1.75;
   color: var(--muted);
+  transition: color var(--t);
 }
 .latest .tr {
-  font-size: calc(var(--fs) * 0.72);
   color: var(--ink-soft);
 }
 /* 流式输出时末尾一个闪烁的光标，表示还没说完 */
