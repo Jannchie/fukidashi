@@ -1,0 +1,238 @@
+@font-face {
+  font-family: "Berkeley Mono";
+  src: url("https://cdn.jannchie.com/fonts/variants/BerkeleyMono-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Berkeley Mono";
+  src: url("https://cdn.jannchie.com/fonts/variants/BerkeleyMono-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-display: swap;
+}
+
+/* ──────────────────────────────────────────────────────────────
+   Yomu 设计令牌
+
+   这个窗口的使用场景决定了设计：它长时间挂在游戏旁边，用户盯着看的
+   只有一样东西——正文。所以暗色是设计中心（夜里不刺眼），强调色取朱，
+   界面上其余一切都要让位给日文排版。
+   ────────────────────────────────────────────────────────────── */
+
+:root {
+  color-scheme: light dark;
+
+  /* 浅色为基准 */
+  --bg: #ECEDEF;
+  --surface: #FFFFFF;
+  --surface-2: #F3F4F6;
+  --line: #D6D9DE;
+  --line-soft: #E4E6EA;
+  --ink: #15171C;
+  --ink-soft: #3E444F;
+  --muted: #6E7684;
+  --accent: #C4451F;
+  --accent-soft: rgba(196, 69, 31, 0.11);
+  --good: #2E7D64;
+  --good-soft: rgba(46, 125, 100, 0.12);
+  --shadow: 0 1px 2px rgba(21, 23, 28, 0.06), 0 8px 24px rgba(21, 23, 28, 0.07);
+  /* 交互底色：悬停 / 按下。必须明显到一眼看得出“这里能点” */
+  --hover: rgba(21, 23, 28, 0.07);
+  --press: rgba(21, 23, 28, 0.12);
+
+  --f-ui: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI",
+    "PingFang SC", "Microsoft YaHei UI", system-ui, sans-serif;
+  /* 正文优先用日文字形完整的字体，避免中日汉字字形混排 */
+  --f-jp: "Yu Gothic UI", "Yu Gothic", "Hiragino Kaku Gothic ProN", "Noto Sans JP",
+    "Meiryo", "Microsoft YaHei UI", sans-serif;
+  --f-mono: "Berkeley Mono", "Cascadia Mono", Consolas, "Microsoft YaHei UI", ui-monospace, monospace;
+
+  --r: 6px;
+  --t: 160ms cubic-bezier(0.2, 0, 0.2, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #131519;
+    --surface: #1B1E24;
+    --surface-2: #232730;
+    --line: #2F343E;
+    --line-soft: #252A32;
+    --ink: #E9EBEF;
+    --ink-soft: #BCC3CE;
+    --muted: #78808E;
+    --accent: #E4572E;
+    --accent-soft: rgba(228, 87, 46, 0.16);
+    --good: #4FA88B;
+    --good-soft: rgba(79, 168, 139, 0.16);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 32px rgba(0, 0, 0, 0.35);
+    --hover: rgba(255, 255, 255, 0.08);
+    --press: rgba(255, 255, 255, 0.13);
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #131519;
+  --surface: #1B1E24;
+  --surface-2: #232730;
+  --line: #2F343E;
+  --line-soft: #252A32;
+  --ink: #E9EBEF;
+  --ink-soft: #BCC3CE;
+  --muted: #78808E;
+  --accent: #E4572E;
+  --accent-soft: rgba(228, 87, 46, 0.16);
+  --good: #4FA88B;
+  --good-soft: rgba(79, 168, 139, 0.16);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 32px rgba(0, 0, 0, 0.35);
+  --hover: rgba(255, 255, 255, 0.08);
+  --press: rgba(255, 255, 255, 0.13);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--f-ui);
+  font-size: 13px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  /* 桌面应用：不要浏览器式的文本选择拖拽感 */
+  user-select: none;
+  cursor: default;
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  border: 1px solid transparent;
+  background: none;
+  cursor: pointer;
+  border-radius: var(--r);
+  transition: background var(--t), border-color var(--t), color var(--t);
+}
+
+button:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* 滚动条：细、低调，深浅主题都取自令牌 */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 6px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+  background-clip: content-box;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* 图标按钮：界面上的操作尽量只用图标，说明放进 data-tip 作即时提示 */
+.ibtn {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  color: var(--ink-soft);
+  border-color: transparent;
+  background: transparent;
+  flex: none;
+}
+.ibtn:hover:not(:disabled) {
+  color: var(--ink);
+  background: var(--hover);
+}
+.ibtn:active:not(:disabled) {
+  background: var(--press);
+}
+.ibtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+/* 开关的“开”态：悬停时仍保持强调色，只加深底色，不能看起来像被关掉 */
+.ibtn.on {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.ibtn.on:hover:not(:disabled) {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
+}
+
+/* 即时提示：比原生 title 快、样式统一。默认出现在下方、右对齐（图标按钮大多靠右）。 */
+[data-tip] {
+  position: relative;
+}
+[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 100;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+  white-space: nowrap;
+  color: var(--ink);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  box-shadow: var(--shadow);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-2px);
+  transition: opacity 120ms, transform 120ms;
+}
+[data-tip]:hover::after {
+  opacity: 1;
+  transform: none;
+  transition-delay: 350ms;
+}
+/* 按钮已经展开了面板时，提示只会挡住面板 */
+[data-tip][aria-expanded="true"]::after {
+  display: none;
+}
+[data-tip-pos="top"]::after {
+  top: auto;
+  bottom: calc(100% + 6px);
+  transform: translateY(2px);
+}
+[data-tip-pos="left"]::after {
+  right: auto;
+  left: 0;
+}

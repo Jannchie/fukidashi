@@ -1,0 +1,46 @@
+[package]
+name = "fukidashi"
+version = "0.1.0"
+description = "Read the Japanese text of visual novels as you play"
+authors = ["Jianqi Pan"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "fukidashi_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+tauri-plugin-window-state = "2"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+anyhow = "1"
+sysinfo = "0.33"
+base64 = "0.22"
+lindera = { version = "6.2", features = ["embed-ipadic"] }
+reqwest = { version = "0.13", features = ["json"] }
+tokio = { version = "1", features = ["sync"] }
+png = "0.17"
+rusqlite = { version = "0.37", features = ["bundled"] }
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Dwm",
+    "Win32_Graphics_Gdi",
+    "Win32_Storage_FileSystem",
+    "Win32_System_LibraryLoader",
+    "Win32_UI_WindowsAndMessaging",
+] }
