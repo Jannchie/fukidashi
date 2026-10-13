@@ -74,6 +74,13 @@ type FukidashiEvent =
   | { kind: 'translation'; id: number; text: string | null; error: string | null; done: boolean }
   | { kind: 'backlog'; game: string; page: HistoryPage }
 
+interface SessionInfo {
+  connected: boolean
+  detail: string
+  /** 正连着的游戏（exe 路径） */
+  game: string | null
+}
+
 /** 一页历史记录：从旧到新，附带当时的译文 */
 interface HistoryPage {
   sentences: Sentence[]
@@ -175,6 +182,27 @@ export function useFukidashi() {
           break
       }
     })
+    await sync()
+  }
+
+  /**
+   * 向 Rust 取一次当前状态。连接状态和历史只在连上时推送一次，
+   * 后台自动连接可能发生在界面开始监听之前，这里补上。
+   */
+  async function sync() {
+    const info = await invoke<SessionInfo>('session_info').catch(() => null)
+    if (!info) return
+    connected.value = info.connected
+    detail.value = info.detail
+    if (!info.game || historyGame.value === info.game) return
+    const page = await invoke<HistoryPage>('history_page', { game: info.game, before: null, limit: PAGE }).catch(() => null)
+    if (!page || historyGame.value === info.game) return
+    // 等结果期间可能已经来了新句子，它们也在库里：按 id 去重后接在后面
+    const ids = new Set(page.sentences.map((s) => s.id))
+    historyGame.value = info.game
+    hasOlder.value = page.more
+    sentences.value = page.sentences.concat(sentences.value.filter((s) => !ids.has(s.id)))
+    translations.value = { ...toTranslations(page.translations), ...translations.value }
   }
 
   function reset() {

@@ -8,9 +8,10 @@ import TranslatorSettings from './components/TranslatorSettings.vue'
 import { useTranslator } from './composables/useTranslator'
 import type { ProcessInfo } from './composables/useFukidashi'
 import { JIcon } from '@jannchie/icons-vue'
-import { IconCloudDownload, IconGamepad, IconLanguages, IconPlay, IconPlugOff, IconTypography } from '@jannchie/icons'
+import { IconCloudDownload, IconGamepad, IconInfo, IconLanguages, IconPlay, IconPlugOff, IconTypography } from '@jannchie/icons'
 import ReaderMenu from './components/ReaderMenu.vue'
 import WindowControls from './components/WindowControls.vue'
+import AboutPanel from './components/AboutPanel.vue'
 import { useReader } from './composables/useReader'
 import { useUpdater } from './composables/useUpdater'
 import { useDragRegion } from './composables/useDragRegion'
@@ -41,6 +42,7 @@ const drag = useDragRegion()
 
 const showPicker = ref(false)
 const showTranslator = ref(false)
+const showAbout = ref(false)
 
 const showReader = ref(false)
 const reader = useReader()
@@ -121,6 +123,9 @@ async function onDemo() {
               @click="showPicker = true">
         <JIcon :icon="IconGamepad" />
       </button>
+      <button class="ibtn" data-tip="关于：版本与更新" aria-label="关于" @click="showAbout = true">
+        <JIcon :icon="IconInfo" />
+      </button>
       <WindowControls />
     </header>
 
@@ -134,7 +139,6 @@ async function onDemo() {
     <div v-else class="welcome">
       <img class="logo" src="/icon.svg" alt="" width="72" height="72" />
       <h1>吹き出し</h1>
-      <p class="sub">连接正在运行的视觉小说，实时显示其中的日文文本。</p>
       <button class="cta" @click="showPicker = true">
         <JIcon :icon="IconGamepad" />连接到游戏
       </button>
@@ -151,6 +155,7 @@ async function onDemo() {
     <ProcessPicker v-if="showPicker" :list="listProcesses" :status="hookStatus"
                    @attach="onAttach" @demo="onDemo" @close="showPicker = false" />
     <TranslatorSettings v-if="showTranslator" @close="showTranslator = false" />
+    <AboutPanel v-if="showAbout" @close="showAbout = false" />
   </div>
 </template>
 
@@ -253,14 +258,7 @@ async function onDemo() {
   font-weight: 500;
   letter-spacing: 0.16em;
   color: var(--ink);
-}
-
-.sub {
-  margin: 0 0 14px;
-  max-width: 22em;
-  font-size: 12.5px;
-  line-height: 1.85;
-  color: var(--muted);
+  margin-bottom: 14px;
 }
 
 .cta {

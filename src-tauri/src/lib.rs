@@ -13,7 +13,7 @@ mod translate;
 
 use games::{Game, Games};
 use history::History;
-use model::{Event, ProcessInfo};
+use model::ProcessInfo;
 use session::{emit, Session};
 use source::replay::ReplaySource;
 use tauri::{AppHandle, Manager, State};
@@ -94,7 +94,13 @@ fn start_replay(app: AppHandle, path: Option<String>, interval_ms: Option<u64>) 
 #[tauri::command]
 fn stop(app: AppHandle, session: State<'_, Session>) {
     session.stop_by_user();
-    emit(&app, Event::Status { connected: false, detail: "已停止".into() });
+    session.set_status(&app, false, "已停止".into());
+}
+
+/// 界面加载完成时取一次当前状态，补上加载前错过的推送
+#[tauri::command]
+fn session_info(app: AppHandle, session: State<'_, Session>) -> session::SessionInfo {
+    session.info(&app)
 }
 
 /// 手动锁定某一路来源；传 None 交回自动选择。
@@ -138,6 +144,7 @@ pub fn run() {
             start_replay,
             stop,
             pin_thread,
+            session_info,
             set_translator,
             list_models,
             list_games,

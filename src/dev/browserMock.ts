@@ -88,6 +88,9 @@ mockIPC(
   (cmd, args) => {
     switch (cmd) {
       case 'list_processes': return PROCESSES
+      case 'session_info': return { connected: false, detail: '未连接', game: null }
+      case 'plugin:app|version': return '0.1.2'
+      case 'plugin:updater|check': return null
       case 'hook_status': return 'v12.1.2.4'
       case 'list_games': return GAMES
       case 'list_models': return ['sakura-galtransl-14b-v3.8:latest', 'qwen3:14b']

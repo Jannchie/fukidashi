@@ -31,6 +31,8 @@ struct Inner {
     game: Option<(u32, String)>,
     /// 用户手动断开的进程：自动连接不要马上又连回去
     suppressed: Option<u32>,
+    /// 最近一次推送的连接状态 (connected, detail)
+    status: (bool, String),
 }
 
 pub struct Session {
@@ -46,6 +48,7 @@ impl Default for Session {
                 next_id: history::EPHEMERAL_BASE,
                 game: None,
                 suppressed: None,
+                status: (false, "未连接".into()),
             }),
         }
     }
@@ -59,6 +62,16 @@ pub fn emit(app: &AppHandle, ev: Event) {
     let _ = app.emit(crate::EVENT, ev);
 }
 
+/// 界面加载完成时取的当前状态。连接和历史都是一次性推送的事件，
+/// 自动连接可能发生在界面开始监听之前，只靠事件会漏掉。
+#[derive(serde::Serialize)]
+pub struct SessionInfo {
+    pub connected: bool,
+    pub detail: String,
+    /// 正连着的游戏（exe 路径）；演示模式和未连接时为 None
+    pub game: Option<String>,
+}
+
 /// 给一页历史标上振假名。振假名不入库：现算很快，词典更新后旧记录也能跟着变好
 pub fn with_ruby(mut page: Page) -> Page {
     for s in &mut page.sentences {
@@ -68,6 +81,23 @@ pub fn with_ruby(mut page: Page) -> Page {
 }
 
 impl Session {
+    /// 更新连接状态并推给前端
+    pub fn set_status(&self, app: &AppHandle, connected: bool, detail: String) {
+        self.inner.lock().unwrap().status = (connected, detail.clone());
+        emit(app, Event::Status { connected, detail });
+    }
+
+    /// 当前状态；顺带推一次来源统计，界面上的来源栏也一起补上
+    pub fn info(&self, app: &AppHandle) -> SessionInfo {
+        let inner = self.inner.lock().unwrap();
+        emit(app, inner.pipeline.snapshot());
+        SessionInfo {
+            connected: inner.status.0,
+            detail: inner.status.1.clone(),
+            game: inner.game.as_ref().map(|(_, path)| path.clone()),
+        }
+    }
+
     /// 停掉当前正在跑的源（如果有）。返回是否真的停了一个。
     pub fn stop_current(&self) -> bool {
         let mut inner = self.inner.lock().unwrap();
@@ -134,7 +164,7 @@ pub fn start(app: &AppHandle, src: Box<dyn Source>, game: Option<(u32, String)>,
                 }
             }
             if let Err(e) = result {
-                emit(&app, Event::Status { connected: false, detail: format!("来源已断开：{e}") });
+                app.state::<Session>().set_status(&app, false, format!("来源已断开：{e}"));
             }
         });
     }
@@ -155,7 +185,7 @@ pub fn start(app: &AppHandle, src: Box<dyn Source>, game: Option<(u32, String)>,
         });
     }
 
-    emit(app, Event::Status { connected: true, detail });
+    session.set_status(app, true, detail);
 }
 
 /// 一行钩子文本：成句的话入库、送翻译、推给前端
@@ -238,7 +268,7 @@ pub fn watch_games(app: AppHandle) {
                 Some((pid, name, path, title)) if candidate == Some(pid) => {
                     candidate = None;
                     if let Err(e) = attach(&app, pid, &name, &path, Some(title), true) {
-                        emit(&app, Event::Status { connected: false, detail: format!("自动连接失败：{e}") });
+                        app.state::<Session>().set_status(&app, false, format!("自动连接失败：{e}"));
                     }
                 }
                 Some((pid, ..)) => candidate = Some(pid),
