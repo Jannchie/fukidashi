@@ -44,7 +44,7 @@
     "publisher": "Jannchie",
     "copyright": "© 2026 Jianqi Pan",
     "category": "Utility",
-    "shortDescription": "把游戏里的日文实时抓出来，边玩边读",
+    "shortDescription": "实时提取视觉小说中的日文文本",
     "license": "GPL-3.0-or-later",
     "windows": {
       "nsis": {

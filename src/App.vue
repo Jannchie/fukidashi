@@ -130,7 +130,7 @@ async function onDemo() {
     <div v-else class="welcome">
       <img class="logo" src="/icon.svg" alt="" width="72" height="72" />
       <h1>吹き出し</h1>
-      <p class="sub">把游戏里的日文实时抓出来，读它，而不是猜它。</p>
+      <p class="sub">连接正在运行的视觉小说，实时显示其中的日文文本。</p>
       <button class="cta" @click="showPicker = true">
         <JIcon :icon="IconGamepad" />连接到游戏
       </button>
