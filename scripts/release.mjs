@@ -1,7 +1,7 @@
 // 发版：改版本号、提交、打 tag。推上 GitHub 后由 .github/workflows/release.yml 构建并发布。
 //
 //   pnpm release patch | minor | major | 1.2.3
-//   pnpm release 1.2.3 --push      # 顺便推送，立即触发构建
+//   pnpm release 1.2.3 --push      # 顺便推送、等构建完成后发布（约 15 分钟）
 import { execFileSync, execSync } from 'node:child_process'
 import { readFileSync, writeFileSync } from 'node:fs'
 
@@ -48,15 +48,39 @@ sh(`git tag v${version}`)
 console.log(`已提交并打上 v${version}`)
 
 // Release 由本机的 gh 账号创建，工作流只负责上传构建产物：
-// 工作流的 GITHUB_TOKEN 创建 Release 时会被拒绝（Resource not accessible by integration），上传则不受影响
+// 工作流的 GITHUB_TOKEN 创建 Release 时会被拒绝（Resource not accessible by integration），上传则不受影响。
+//
+// 先建成预发布：应用读的是「最新 Release」里的 latest.json，构建要十几分钟，
+// 这期间新 Release 还没有 latest.json，标成最新会让所有人检查更新都失败。
+// 等工作流传完再转正。
 const notes = `下载并运行 \`Fukidashi_${version}_x64-setup.exe\`。已安装旧版本的用户会在应用内收到更新提示。`
-const releaseArgs = ['release', 'create', `v${version}`, '--verify-tag', '--title', `Fukidashi v${version}`, '--notes', notes]
+const releaseArgs = ['release', 'create', `v${version}`, '--verify-tag', '--prerelease', '--title', `Fukidashi v${version}`, '--notes', notes]
+
+/** 等这个 tag 触发的构建跑完，成功了就把 Release 转为正式的最新版 */
+function publishWhenBuilt() {
+  const gh = (args) => execFileSync('gh', args, { encoding: 'utf8' }).trim()
+  let run = ''
+  for (let i = 0; i < 30 && !run; i++) {
+    run = gh(['run', 'list', '--branch', `v${version}`, '--limit', '1', '--json', 'databaseId', '-q', '.[0].databaseId'])
+    if (!run) execSync('node -e "setTimeout(() => {}, 5000)"')
+  }
+  if (!run) throw new Error('没找到这个 tag 的构建')
+  console.log(`等待构建 ${run} 完成……`)
+  try {
+    execFileSync('gh', ['run', 'watch', run, '--exit-status', '--interval', '30'], { stdio: 'ignore' })
+  } catch {
+    console.error(`构建失败，Release 保持预发布。修好后重跑构建，再执行：gh release edit v${version} --prerelease=false --latest`)
+    process.exit(1)
+  }
+  gh(['release', 'edit', `v${version}`, '--prerelease=false', '--latest'])
+  console.log(`v${version} 已发布为最新版本`)
+}
 
 if (flags.includes('--push')) {
   sh('git push')
   sh(`git push origin v${version}`)
   execFileSync('gh', releaseArgs, { stdio: 'inherit' })
-  console.log('已推送并创建 Release，GitHub Actions 构建完成后会上传安装包和 latest.json')
+  publishWhenBuilt()
 } else {
   console.log(`推送 tag 后用 gh 创建 Release，或直接重新运行：pnpm release ${version} --push`)
 }
