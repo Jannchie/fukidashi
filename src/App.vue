@@ -13,6 +13,7 @@ import ReaderMenu from './components/ReaderMenu.vue'
 import WindowControls from './components/WindowControls.vue'
 import { useReader } from './composables/useReader'
 import { useUpdater } from './composables/useUpdater'
+import { useDragRegion } from './composables/useDragRegion'
 
 const {
   sentences,
@@ -35,6 +36,8 @@ const {
   hasOlder,
   loadOlder,
 } = useFukidashi()
+
+const drag = useDragRegion()
 
 const showPicker = ref(false)
 const showTranslator = ref(false)
@@ -86,20 +89,21 @@ async function onDemo() {
 
 <template>
   <div class="app">
-    <!-- 这条就是标题栏：空白处可拖动窗口、双击最大化；带 data-tauri-drag-region 的元素才算空白 -->
-    <header class="top" data-tauri-drag-region>
-      <img class="appicon" src="/icon.svg" alt="" width="16" height="16" draggable="false" data-tauri-drag-region />
-      <span class="status" :class="{ live: connected }" aria-hidden="true" data-tauri-drag-region></span>
-      <span class="detail" data-tauri-drag-region>{{ detail }}</span>
+    <!-- 这条就是标题栏：按钮以外的地方可拖动窗口、双击最大化 -->
+    <header class="top" @pointerdown="drag.onPointerdown" @pointermove="drag.onPointermove"
+            @pointerup="drag.onPointerup" @mousedown="drag.onMousedown" @dblclick="drag.onDblclick">
+      <img class="appicon" src="/icon.svg" alt="" width="16" height="16" draggable="false" />
+      <span class="status" :class="{ live: connected }" aria-hidden="true"></span>
+      <span class="detail">{{ detail }}</span>
 
-      <div class="spacer" data-tauri-drag-region></div>
+      <div class="spacer"></div>
 
       <button v-if="updater.available.value" class="ibtn update" :class="{ busy: updater.progress.value !== null }"
               :data-tip="updateTip" :aria-label="updateTip" @click="updater.install">
         <JIcon :icon="IconCloudDownload" />
       </button>
 
-      <div class="anchor">
+      <div class="anchor" data-no-drag>
         <button class="ibtn" :class="{ on: showReader }" data-tip="阅读设置：字号、振假名、译文"
                 aria-label="阅读设置" :aria-expanded="showReader" @click="showReader = !showReader">
           <JIcon :icon="IconTypography" />
