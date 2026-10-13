@@ -2,7 +2,7 @@
 //
 //   pnpm release patch | minor | major | 1.2.3
 //   pnpm release 1.2.3 --push      # 顺便推送，立即触发构建
-import { execSync } from 'node:child_process'
+import { execFileSync, execSync } from 'node:child_process'
 import { readFileSync, writeFileSync } from 'node:fs'
 
 const [arg, ...flags] = process.argv.slice(2)
@@ -47,10 +47,16 @@ sh(`git commit -m "release: v${version}"`)
 sh(`git tag v${version}`)
 console.log(`已提交并打上 v${version}`)
 
+// Release 由本机的 gh 账号创建，工作流只负责上传构建产物：
+// 工作流的 GITHUB_TOKEN 创建 Release 时会被拒绝（Resource not accessible by integration），上传则不受影响
+const notes = `下载并运行 \`Fukidashi_${version}_x64-setup.exe\`。已安装旧版本的用户会在应用内收到更新提示。`
+const releaseArgs = ['release', 'create', `v${version}`, '--verify-tag', '--title', `Fukidashi v${version}`, '--notes', notes]
+
 if (flags.includes('--push')) {
   sh('git push')
   sh(`git push origin v${version}`)
-  console.log('已推送，GitHub Actions 开始构建，完成后自动出现在 Releases')
+  execFileSync('gh', releaseArgs, { stdio: 'inherit' })
+  console.log('已推送并创建 Release，GitHub Actions 构建完成后会上传安装包和 latest.json')
 } else {
-  console.log(`推送后开始构建：git push && git push origin v${version}`)
+  console.log(`推送 tag 后用 gh 创建 Release，或直接重新运行：pnpm release ${version} --push`)
 }
