@@ -1,10 +1,12 @@
 mod backlog;
+mod follow;
 mod furigana;
 mod games;
 mod history;
 mod migrate;
 mod model;
 mod normalize;
+mod overlay;
 mod pipeline;
 mod proc;
 mod session;
@@ -109,6 +111,12 @@ fn pin_thread(app: AppHandle, session: State<'_, Session>, games: State<'_, Game
     emit(&app, session.pin(&games, key));
 }
 
+/// 叠加模式开关；`hot` 是开着时仍要接收鼠标的把手区域（窗口内 CSS 像素）
+#[tauri::command]
+fn set_overlay(app: AppHandle, on: bool, hot: Vec<overlay::Rect>) {
+    overlay::set(&app, on, hot);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let context = tauri::generate_context!();
@@ -134,6 +142,7 @@ pub fn run() {
             }));
             furigana::warm_up();
             session::watch_games(app.handle().clone());
+            follow::start(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -150,7 +159,8 @@ pub fn run() {
             list_games,
             history_page,
             set_game_auto,
-            forget_game
+            forget_game,
+            set_overlay
         ])
         .build(context)
         .expect("error while running tauri application")

@@ -92,6 +92,8 @@ mockIPC(
       case 'plugin:app|version': return '0.1.2'
       case 'plugin:updater|check': return null
       case 'hook_status': return 'v12.1.2.4'
+      case 'plugin:window|outer_position': return { x: 100, y: 100 }
+      case 'plugin:window|outer_size': return { width: 460, height: 700 }
       case 'list_games': return GAMES
       case 'list_models': return ['sakura-galtransl-14b-v3.8:latest', 'qwen3:14b']
       case 'attach_process': return play('已附加到 おしかけ奥様と、キミの嘘.exe · 32 位', PROCESSES[0].path)

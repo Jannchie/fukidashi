@@ -8,10 +8,12 @@ import TranslatorSettings from './components/TranslatorSettings.vue'
 import { useTranslator } from './composables/useTranslator'
 import type { ProcessInfo } from './composables/useFukidashi'
 import { JIcon } from '@jannchie/icons-vue'
-import { IconCloudDownload, IconGamepad, IconInfo, IconLanguages, IconPlay, IconPlugOff, IconTypography } from '@jannchie/icons'
+import { IconCloudDownload, IconGamepad, IconInfo, IconLanguages, IconPictureInPicture, IconPin, IconPlay, IconPlugOff, IconTypography } from '@jannchie/icons'
 import ReaderMenu from './components/ReaderMenu.vue'
 import WindowControls from './components/WindowControls.vue'
 import AboutPanel from './components/AboutPanel.vue'
+import OverlayView from './components/OverlayView.vue'
+import { useWindowMode } from './composables/useWindowMode'
 import { useReader } from './composables/useReader'
 import { useUpdater } from './composables/useUpdater'
 import { useDragRegion } from './composables/useDragRegion'
@@ -39,6 +41,12 @@ const {
 } = useFukidashi()
 
 const drag = useDragRegion()
+
+const windowMode = useWindowMode()
+const { overlay } = windowMode
+onMounted(() => windowMode.init())
+// 叠加模式下整个页面透明，只剩叠加层自己的半透明底
+watch(overlay, (on) => document.documentElement.classList.toggle('overlay', on))
 
 const showPicker = ref(false)
 const showTranslator = ref(false)
@@ -90,7 +98,9 @@ async function onDemo() {
 </script>
 
 <template>
-  <div class="app">
+  <OverlayView v-if="overlay" :sentences="sentences" :translations="translations" :prefs="reader.prefs.value" />
+
+  <div v-else class="app">
     <!-- 这条就是标题栏：按钮以外的地方可拖动窗口、双击最大化 -->
     <header class="top" @pointerdown="drag.onPointerdown" @pointermove="drag.onPointermove"
             @pointerup="drag.onPointerup" @mousedown="drag.onMousedown" @dblclick="drag.onDblclick">
@@ -122,6 +132,15 @@ async function onDemo() {
       <button class="ibtn" :data-tip="connected ? '切换游戏' : '连接到游戏'" aria-label="连接到游戏"
               @click="showPicker = true">
         <JIcon :icon="IconGamepad" />
+      </button>
+      <button class="ibtn" :class="{ on: windowMode.prefs.value.pinned }"
+              :data-tip="windowMode.prefs.value.pinned ? '取消置顶' : '置顶'" aria-label="置顶"
+              :aria-pressed="windowMode.prefs.value.pinned" @click="windowMode.togglePin">
+        <JIcon :icon="IconPin" />
+      </button>
+      <button class="ibtn" data-tip="叠加模式：盖在游戏文本框上，鼠标穿透" aria-label="叠加模式"
+              @click="windowMode.enterOverlay">
+        <JIcon :icon="IconPictureInPicture" />
       </button>
       <button class="ibtn" data-tip="关于：版本与更新" aria-label="关于" @click="showAbout = true">
         <JIcon :icon="IconInfo" />
@@ -167,11 +186,13 @@ async function onDemo() {
   background: var(--bg);
 }
 
+/* 弹出菜单相对整条标题栏定位，靠窗口右边展开；按钮多了也不会伸出窗口左边 */
 .anchor {
-  position: relative;
+  position: static;
 }
 
 .top {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 4px;

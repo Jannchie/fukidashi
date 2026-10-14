@@ -98,6 +98,11 @@ impl Session {
         }
     }
 
+    /// 当前连着的游戏进程；演示模式和未连接时为 None
+    pub fn game_pid(&self) -> Option<u32> {
+        self.inner.lock().unwrap().game.as_ref().map(|(pid, _)| *pid)
+    }
+
     /// 停掉当前正在跑的源（如果有）。返回是否真的停了一个。
     pub fn stop_current(&self) -> bool {
         let mut inner = self.inner.lock().unwrap();
@@ -247,6 +252,10 @@ pub fn attach(app: &AppHandle, pid: u32, name: &str, path: &str, title: Option<S
 ///
 /// 窗口要连续两轮都在才动手 —— 刚弹出窗口时引擎可能还没加载完，钩子会认不出引擎。
 pub fn watch_games(app: AppHandle) {
+    // 开发时和装好的正式版同时开着，两边会抢同一个游戏：设了这个变量就不自动连接
+    if std::env::var_os("FUKIDASHI_NO_AUTO_ATTACH").is_some() {
+        return;
+    }
     std::thread::spawn(move || {
         let mut candidate: Option<u32> = None;
         loop {

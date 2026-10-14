@@ -3,9 +3,11 @@ import { onMounted, onUnmounted, ref } from 'vue'
 import { JIcon } from '@jannchie/icons-vue'
 import { IconMinus, IconPlus } from '@jannchie/icons'
 import { FONT_MAX, FONT_MIN, useReader } from '../composables/useReader'
+import { useWindowMode } from '../composables/useWindowMode'
 
 const emit = defineEmits<{ close: [] }>()
 const { prefs, bigger, smaller, setFont } = useReader()
+const { prefs: win } = useWindowMode()
 
 const root = ref<HTMLElement | null>(null)
 
@@ -56,6 +58,14 @@ onUnmounted(() => {
       <input v-model="prefs.translation" type="checkbox" />
     </label>
 
+    <div class="row">
+      <span class="name">叠加背景</span>
+      <div class="stepper">
+        <input v-model.number="win.overlayOpacity" type="range" min="0" max="90" step="5" aria-label="叠加模式背景浓度" />
+        <span class="val">{{ win.overlayOpacity }}%</span>
+      </div>
+    </div>
+
     <p class="preview" :style="{ fontSize: `${prefs.fontSize}px` }">
       <ruby v-if="prefs.ruby">彼女<rt>かのじょ</rt></ruby><template v-else>彼女</template>は静かに笑った。
     </p>
@@ -66,7 +76,7 @@ onUnmounted(() => {
 .menu {
   position: absolute;
   top: calc(100% + 6px);
-  right: 0;
+  right: 8px;
   z-index: 60;
   display: flex;
   flex-direction: column;
@@ -102,7 +112,7 @@ onUnmounted(() => {
   accent-color: var(--accent);
 }
 .val {
-  width: 24px;
+  min-width: 24px;
   text-align: right;
   font-family: var(--f-mono);
   font-size: 12px;

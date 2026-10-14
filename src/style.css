@@ -124,6 +124,16 @@ body {
   cursor: default;
 }
 
+/* 叠加模式：窗口本身是透明的，页面也不能铺底色。
+   color-scheme 也要退回 normal：深色方案下浏览器会给画布铺一层不透明的深色 */
+html.overlay {
+  color-scheme: normal;
+  background: transparent;
+}
+html.overlay body {
+  background: transparent;
+}
+
 ::selection {
   background: var(--accent-soft);
 }
