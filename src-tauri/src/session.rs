@@ -196,15 +196,20 @@ pub fn start(app: &AppHandle, src: Box<dyn Source>, game: Option<(u32, String)>,
 /// 一行钩子文本：成句的话入库、送翻译、推给前端
 fn consume(app: &AppHandle, line: &HookLine) {
     let session = app.state::<Session>();
-    let (text, game) = {
+    let (texts, game) = {
         let mut inner = session.inner.lock().unwrap();
         // 必须用流水线归一化后的文本，绝不能回头去取 line.text
-        let Some(text) = inner.pipeline.feed(line) else { return };
-        (text, inner.game.as_ref().map(|(_, path)| path.clone()))
+        (inner.pipeline.feed(line), inner.game.as_ref().map(|(_, path)| path.clone()))
     };
+    for text in texts {
+        push_sentence(app, line, text, game.as_deref());
+    }
+}
 
+fn push_sentence(app: &AppHandle, line: &HookLine, text: String, game: Option<&str>) {
+    let session = app.state::<Session>();
     let at = now_ms();
-    let stored = game.and_then(|g| app.state::<History>().add(&g, &line.key, &text, at));
+    let stored = game.and_then(|g| app.state::<History>().add(g, &line.key, &text, at));
     let id = stored.unwrap_or_else(|| {
         let mut inner = session.inner.lock().unwrap();
         inner.next_id += 1;

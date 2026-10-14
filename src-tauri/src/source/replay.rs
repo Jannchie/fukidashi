@@ -152,9 +152,7 @@ mod tests {
                 Ok(l) => {
                     // 收集 feed 交出的文本本身，而不是原始行 —— 这样这个测试
                     // 也能覆盖归一化，而不只是"选对了来源"
-                    if let Some(t) = p.feed(&l) {
-                        emitted.push(t);
-                    }
+                    emitted.extend(p.feed(&l));
                 }
                 Err(_) => break,
             }

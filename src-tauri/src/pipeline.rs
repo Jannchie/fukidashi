@@ -233,13 +233,14 @@ impl Pipeline {
         self.pinned.is_none() && self.total_lines < WARMUP_LINES
     }
 
-    /// 吃进一行；若该行应作为正文推给前端，返回**归一化之后**的文本。
+    /// 吃进一行；返回应作为正文推给前端的句子（**归一化之后**的文本）。
+    /// 快速翻页时几句被拼成一行，会拆成多句返回；不是正文则返回空。
     ///
     /// 刻意返回 String 而不是 bool：早先的版本返回 bool，调用方只好自己去用
     /// `line.text`，于是这里做的折叠算完就被丢掉了 —— 界面上照旧是原始重复文本，
     /// 而单元测试只断言返回值为真，完全看不出来。把处理结果本身作为返回值，
     /// 调用方就没有拿到未处理文本的机会了。
-    pub fn feed(&mut self, line: &HookLine) -> Option<String> {
+    pub fn feed(&mut self, line: &HookLine) -> Vec<String> {
         if self.pinned.is_none() && self.prefer.as_deref().is_some_and(|h| h == line.hcode) {
             self.pinned = Some(line.key.clone());
         }
@@ -255,17 +256,16 @@ impl Pipeline {
 
         self.recompute_auto();
 
-        let Some(active) = self.active() else { return None };
-        if active != &line.key {
-            return None;
+        if self.active() != Some(&line.key) {
+            return vec![];
         }
 
         let text = collapse_repeats(line.text.trim());
         let text = text.trim();
-        if text.is_empty() || !self.backlog.accept(text, std::time::Instant::now()) {
-            return None;
+        if text.is_empty() {
+            return vec![];
         }
-        Some(text.to_string())
+        self.backlog.accept(text, std::time::Instant::now())
     }
 
     /// 重新计算自动选择的来源。
@@ -371,9 +371,9 @@ mod tests {
             let _ = p.feed(&line("a", "テスト文章がここにあります。"));
         }
         p.pin(Some("a".into()));
-        assert!(p.feed(&line("a", "新しい文章です。")).is_some());
-        assert!(p.feed(&line("a", "新しい文章です。")).is_none());
-        assert!(p.feed(&line("a", "また別の文章です。")).is_some());
+        assert!(!p.feed(&line("a", "新しい文章です。")).is_empty());
+        assert!(p.feed(&line("a", "新しい文章です。")).is_empty());
+        assert!(!p.feed(&line("a", "また別の文章です。")).is_empty());
     }
 
     /// 回归保护：`feed` 必须交出**归一化之后**的文本。
@@ -387,7 +387,7 @@ mod tests {
         p.pin(Some("a".into()));
         // 每字重复 5 遍，模拟描边绘制多遍触发的钩子输出
         let raw: String = "きょうはいいてんきだ".chars().flat_map(|c| std::iter::repeat_n(c, 5)).collect();
-        assert_eq!(p.feed(&line("a", &raw)).as_deref(), Some("きょうはいいてんきだ"));
+        assert_eq!(p.feed(&line("a", &raw)), ["きょうはいいてんきだ"]);
     }
 
     #[test]
@@ -413,7 +413,7 @@ mod tests {
         assert!(p.pinned.is_none(), "H-code 不符的不锁定");
         let out = p.feed(&line("1:bb:0:0", "HQX-C@20DA90:a.exe", "こんにちは、世界"));
         assert_eq!(p.pinned.as_deref(), Some("1:bb:0:0"));
-        assert!(out.is_some(), "锁定后第一句就该出来");
+        assert!(!out.is_empty(), "锁定后第一句就该出来");
         assert_eq!(p.pinned_hcode().as_deref(), Some("HQX-C@20DA90:a.exe"));
 
         p.reset();
