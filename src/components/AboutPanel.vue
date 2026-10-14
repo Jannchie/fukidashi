@@ -51,10 +51,10 @@ const state = computed(() => {
       <span class="hint">新版本发布在 GitHub Releases</span>
       <button v-if="updater.status.value === 'available'" class="primary"
               :disabled="updater.progress.value !== null" @click="updater.install">
-        <JIcon :icon="IconCloudDownload" :size="14" />更新并重启
+        <JIcon :icon="IconCloudDownload" :size="13" />更新并重启
       </button>
       <button v-else class="primary" :disabled="updater.status.value === 'checking'" @click="updater.checkNow">
-        <JIcon :icon="IconRefresh" :size="14" />检查更新
+        <JIcon :icon="IconRefresh" :size="13" />检查更新
       </button>
     </template>
   </Modal>
@@ -82,6 +82,6 @@ const state = computed(() => {
   user-select: text;
 }
 .err {
-  color: var(--accent);
+  color: var(--danger);
 }
 </style>

@@ -139,6 +139,6 @@ onMounted(refresh)
 }
 
 .bad {
-  color: var(--accent);
+  color: var(--danger);
 }
 </style>

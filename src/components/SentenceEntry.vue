@@ -34,6 +34,7 @@ defineProps<{
 /* 字号全部从 --fs 按比例推出来，调一个值整体缩放。
    所有句子同一字号：新句到来时上一句不缩小，列表只做平移，滚动才顺 */
 .entry {
+  position: relative;
   margin: 0 0 calc(var(--fs) * 0.8);
 }
 
@@ -58,9 +59,20 @@ rt {
   user-select: none;
 }
 
-/* 最新一句只靠颜色突出，不改字号 */
+/* 最新一句靠颜色和左侧一条细线突出，不改字号：
+   视线从游戏切回来时先落到竖线上，不用在几句里逐行比较深浅 */
 .latest .line {
   color: var(--ink);
+}
+.latest::before {
+  content: '';
+  position: absolute;
+  left: -13px;
+  top: calc(var(--fs) * 0.35);
+  bottom: calc(var(--fs) * 0.35);
+  width: 2px;
+  border-radius: 1px;
+  background: var(--accent);
 }
 .latest rt {
   color: var(--ink-soft);
@@ -92,6 +104,6 @@ rt {
 }
 .tr.failed {
   font-size: 12px;
-  color: var(--accent);
+  color: var(--danger);
 }
 </style>

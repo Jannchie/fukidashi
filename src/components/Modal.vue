@@ -90,7 +90,7 @@ header {
 h2 {
   margin: 0;
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 500;
   letter-spacing: -0.01em;
 }
 
@@ -122,7 +122,7 @@ footer {
 
 .modal label {
   font-size: 11.5px;
-  font-weight: 600;
+  font-weight: 400;
   letter-spacing: 0.03em;
   color: var(--muted);
   text-transform: uppercase;
@@ -182,7 +182,7 @@ footer {
 .modal .chip {
   padding: 1px 6px;
   font-size: 10.5px;
-  font-weight: 600;
+  font-weight: 400;
   letter-spacing: 0.04em;
   border-radius: 3px;
   flex: none;
@@ -192,19 +192,20 @@ footer {
   background: var(--good-soft);
 }
 .modal .chip.warn {
-  color: var(--accent);
-  background: var(--accent-soft);
+  color: var(--danger);
+  background: var(--danger-soft);
 }
 
 .modal .primary {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 7px 16px;
-  font-weight: 600;
-  color: #fff;
-  background: var(--accent);
-  border-color: var(--accent);
+  padding: 5px 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--on-accent);
+  background: var(--accent-fill);
+  border-color: var(--accent-fill);
 }
 .modal .primary:hover:not(:disabled) {
   filter: brightness(1.08);

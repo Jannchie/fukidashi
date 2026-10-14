@@ -336,7 +336,7 @@ onMounted(async () => {
   display: grid;
   place-items: center;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 400;
   color: var(--muted);
   background: var(--surface);
   border: 1px solid var(--line-soft);
@@ -350,7 +350,7 @@ onMounted(async () => {
   min-width: 0;
 }
 .ptitle {
-  font-weight: 600;
+  font-weight: 400;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

@@ -137,10 +137,10 @@ async function onDemo() {
                 :has-older="hasOlder" :load-older="loadOlder" />
 
     <div v-else class="welcome">
-      <img class="logo" src="/icon.svg" alt="" width="72" height="72" />
+      <img class="logo" src="/icon.svg" alt="" width="56" height="56" />
       <h1>吹き出し</h1>
       <button class="cta" @click="showPicker = true">
-        <JIcon :icon="IconGamepad" />连接到游戏
+        <JIcon :icon="IconGamepad" :size="14" />连接到游戏
       </button>
       <button class="link" @click="onDemo">
         <JIcon :icon="IconPlay" :size="13" />没有游戏在跑？先看演示
@@ -176,7 +176,7 @@ async function onDemo() {
   align-items: center;
   gap: 4px;
   flex: none;
-  height: 38px;
+  height: 34px;
   /* 右边贴着窗口按钮，不留边 */
   padding: 0 0 0 12px;
   user-select: none;
@@ -231,9 +231,9 @@ async function onDemo() {
   margin: 0;
   padding: 7px 14px;
   font-size: 12px;
-  color: var(--accent);
-  background: var(--accent-soft);
-  border-bottom: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-bottom: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
 }
 
 .welcome {
@@ -254,22 +254,22 @@ async function onDemo() {
 .welcome h1 {
   margin: 0;
   font-family: var(--f-jp);
-  font-size: 34px;
+  font-size: 28px;
   font-weight: 500;
   letter-spacing: 0.16em;
   color: var(--ink);
-  margin-bottom: 14px;
+  margin-bottom: 10px;
 }
 
 .cta {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 9px 22px;
-  font-weight: 600;
-  color: #fff;
-  background: var(--accent);
-  border-color: var(--accent);
+  gap: 6px;
+  padding: 5px 14px;
+  font-weight: 500;
+  color: var(--on-accent);
+  background: var(--accent-fill);
+  border-color: var(--accent-fill);
 }
 .cta:hover {
   filter: brightness(1.08);

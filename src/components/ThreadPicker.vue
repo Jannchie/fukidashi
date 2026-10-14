@@ -115,7 +115,7 @@ function tier(score: number) {
 .mode {
   padding: 1px 6px;
   font-size: 10.5px;
-  font-weight: 600;
+  font-weight: 400;
   letter-spacing: 0.04em;
   color: var(--accent);
   background: var(--accent-soft);

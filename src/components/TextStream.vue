@@ -144,7 +144,7 @@ function jumpToLatest() {
 <template>
   <div class="stream">
     <div ref="scroller" class="scroller" :style="{ '--fs': `${prefs.fontSize}px` }" @scroll.passive="onScroll">
-      <div ref="content">
+      <div ref="content" class="col">
         <p v-if="hasOlder" class="older">往上翻加载更早的记录…</p>
         <template v-for="(s, i) in sentences" :key="s.id">
           <p v-if="dividers[i]" class="when"><span>{{ dividers[i] }}</span></p>
@@ -190,6 +190,12 @@ function jumpToLatest() {
   /* 正文可以选中复制 —— 查词、贴给别人问都需要 */
   user-select: text;
   cursor: text;
+}
+
+/* 窗口拉宽（最大化）时行不能无限变长：一行日文超过三十多字，眼睛换行时容易串行 */
+.col {
+  max-width: calc(var(--fs) * 32);
+  margin: 0 auto;
 }
 
 /* 每次游玩开头的时间：细线中间一个小标签，不抢正文 */
@@ -258,8 +264,8 @@ function jumpToLatest() {
   bottom: 16px;
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   border-radius: 50%;
   color: var(--ink);

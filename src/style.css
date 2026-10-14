@@ -12,10 +12,11 @@
 }
 
 /* ──────────────────────────────────────────────────────────────
-   Yomu 设计令牌
+   Fukidashi 设计令牌
 
    这个窗口的使用场景决定了设计：它长时间挂在游戏旁边，用户盯着看的
-   只有一样东西——正文。所以暗色是设计中心（夜里不刺眼），强调色取朱，
+   只有一样东西——正文。所以暗色是设计中心（夜里不刺眼），强调色取缥（沉稳的灰蓝），
+   和应用图标同色；报错另用红色，不和强调色混用。
    界面上其余一切都要让位给日文排版。
    ────────────────────────────────────────────────────────────── */
 
@@ -31,8 +32,13 @@
   --ink: #15171C;
   --ink-soft: #3E444F;
   --muted: #6E7684;
-  --accent: #D6336C;
-  --accent-soft: rgba(214, 51, 108, 0.11);
+  --accent: #2F74C0;
+  --accent-soft: rgba(47, 116, 192, 0.11);
+  /* 实心按钮的底色：和应用图标的底色是同一个值，深浅主题都不变，上面一律白字（对应图标里的白气泡） */
+  --accent-fill: #2F74C0;
+  --on-accent: #FFFFFF;
+  --danger: #C4453B;
+  --danger-soft: rgba(196, 69, 59, 0.10);
   --good: #2E7D64;
   --good-soft: rgba(46, 125, 100, 0.12);
   --shadow: 0 1px 2px rgba(21, 23, 28, 0.06), 0 8px 24px rgba(21, 23, 28, 0.07);
@@ -62,8 +68,10 @@
     --ink: #E9EBEF;
     --ink-soft: #BCC3CE;
     --muted: #78808E;
-    --accent: #F06595;
-    --accent-soft: rgba(240, 101, 149, 0.16);
+    --accent: #82B4EC;
+    --accent-soft: rgba(130, 180, 236, 0.14);
+      --danger: #F0857A;
+    --danger-soft: rgba(240, 133, 122, 0.14);
     --good: #4FA88B;
     --good-soft: rgba(79, 168, 139, 0.16);
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 32px rgba(0, 0, 0, 0.35);
@@ -81,8 +89,10 @@
   --ink: #E9EBEF;
   --ink-soft: #BCC3CE;
   --muted: #78808E;
-  --accent: #F06595;
-  --accent-soft: rgba(240, 101, 149, 0.16);
+  --accent: #82B4EC;
+  --accent-soft: rgba(130, 180, 236, 0.14);
+  --danger: #F0857A;
+  --danger-soft: rgba(240, 133, 122, 0.14);
   --good: #4FA88B;
   --good-soft: rgba(79, 168, 139, 0.16);
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 32px rgba(0, 0, 0, 0.35);
@@ -165,8 +175,8 @@ button:focus-visible,
   position: relative;
   display: inline-grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
+  width: 26px;
+  height: 26px;
   padding: 0;
   color: var(--ink-soft);
   border-color: transparent;
