@@ -92,6 +92,16 @@ function tier(score: number) {
   padding: 7px 14px;
   border-radius: 0;
   font-size: 12px;
+  white-space: nowrap;
+}
+/* 只有钩子名可以收缩（省略号）；其余小件不许被挤：
+   中文能在任意两字间折行，挤到最窄时「自动」「2 路」会竖着叠起来，把整条栏撑高 */
+.bar > * {
+  flex: none;
+}
+.bar > .fn {
+  flex: 0 1 auto;
+  min-width: 0;
 }
 .bar:hover {
   background: var(--hover);
