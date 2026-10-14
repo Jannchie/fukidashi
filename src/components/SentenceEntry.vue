@@ -41,7 +41,7 @@ defineProps<{
 .line {
   margin: 0;
   font-family: var(--f-jp);
-  font-size: calc(var(--fs) * 0.82);
+  font-size: calc(var(--fs) * 0.7);
   /* 留出振假名的位置，免得上下行挤在一起 */
   line-height: 2.05;
   color: var(--ink-soft);
@@ -53,7 +53,7 @@ defineProps<{
 
 /* 振假名：小、弱、不参与选中复制（复制出来的应是原文） */
 rt {
-  font-size: 0.5em;
+  font-size: 0.55em;
   color: var(--muted);
   letter-spacing: 0;
   user-select: none;
@@ -78,16 +78,16 @@ rt {
   color: var(--ink-soft);
 }
 
-/* 译文跟在原文下面，始终比原文弱一级：读的是日文，译文只是兜底 */
+/* 译文是主读的那一行，比原文大；原文在上面作对照 */
 .tr {
   margin: 2px 0 0;
-  font-size: calc(var(--fs) * 0.66);
-  line-height: 1.75;
-  color: var(--muted);
+  font-size: calc(var(--fs) * 0.8);
+  line-height: 1.7;
+  color: var(--ink-soft);
   transition: color var(--t);
 }
 .latest .tr {
-  color: var(--ink-soft);
+  color: var(--ink);
 }
 /* 流式输出时末尾一个闪烁的光标，表示还没说完 */
 .tr.streaming::after {
