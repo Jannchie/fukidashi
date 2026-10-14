@@ -1,6 +1,6 @@
 [package]
 name = "fukidashi"
-version = "0.1.5"
+version = "0.1.6"
 description = "Read the Japanese text of visual novels as you play"
 authors = ["Jianqi Pan"]
 edition = "2021"
